@@ -1,1 +1,4726 @@
+---
+title: "NIBS_BUGSnet"
+author: "Jacopo Cristini"
+date: "2024-11-18"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+# ---
+# NIBS CODING
+# ---
+# 
+# ---
+# Library \~ Loading
+# 
+# DATAset IMPORT
+# 
+# PREPARE OUTCOMES
+#   Different rho for SMD and SD/SE within
+#   Correlations between SMDs and SD/SEs
+# 
+#   SUBJECTIVE SLEEP OUTCOMES
+#   PREPARE DATASET FOR BUGSnet, GEmTC, and PCNETMETA
+# 
+# BUGSnet
+#   Data.prep
+#   HETEROGENEITY
+#   NIBS characteristics
+#   Participants characteristics
+#   PWMA \~ HETEROGENEITY
+#   PWMA \~ Sensitivity: rTMS, rTMS_HF vs. LF, tDCS, NIBS,
+#   NIBS with CVS, NIBS without K2020-K2024,
+#   NIBS with SD from rho 0.3 to rho 0.8
+#  Model NIBS
+#   NetPlot and NetTab
+#   BNMA Model: Vague PRIORS, Random, Fixed, Forest, SUCRA, League Tab, Consistency assessment
+#  Sensitivity Analysis
+#   Remove Khedr 2020 and 2024
+#   BNMA Using PRIORS - effect in favour of NIBS
+#   Exclude Wilkinson (CVS)
+#  Network Meta-Regression: Sex Ratio, Sessions, Age, DD, NIH study quality \~ not possible with BUGSnet
+# 
+# GEmTC \~ Replication of NMA, Node=Splitting & NetMeta-Regressions
+#  BNMA replications \~ same findings and actually same M-95%CrI
+#  Node Splitting \~ no Closed loop = no inconsistency at the local level \~ results aligns with PMA
+#  Network Meta-Regression \~ NIBS Sessions, Sex Ratio, Age, DD, NIH-Study quality
+# 
+# Meta / Metafor \~ rTMS focus on Subjective and Objective sleep outcomes
+#  Meta-analysis by subgroups & Sensitivity analysis
+#  Meta-regressions using TMS parameters and NIH & Sensitivity analysis
+# 
+# PCNETMETA
+#  Single-arm studies included \~ run Mean_Diff and SD_diff_w (not interpretable but consistent)
+#  Sensitivity analysis excluding Wilkinson et al., (CVS)
+# 
+# NETMETA
+#  Perform same as B\~NMA
+#  Comparison-adjusted Funnel Plot with frequentist approach
+#  
+# Comparison-Adjusted Funnel Plot with Bayes - extracting from BUGSnet output
+# 
+# ###JC92###
+# ---
+
+```
+
+```{r Library, include=FALSE}
+
+# LIBRARIES
+library(faraway)
+library(dplyr)
+library(tidybayes)
+library(corrplot)
+library(ggplot2)
+library(ggridges)
+library(glue)
+library(stringr)
+library(forcats)
+library(extraDistr)
+library(PerformanceAnalytics)
+library(meta)
+library(metafor)
+library(BUGSnet)
+library(gemtc)
+library(pcnetmeta)
+library(netmeta)
+
+```
+
+################################################################################ 
+
+#### DATAset IMPORT
+
+################################################################################ 
+
+```{r Import}
+
+#### IMPORT DATA ####
+
+dataset <- read.csv("C:/Users/jacop/Documents/4.NI-BrainStimPD/Data/BUGSnet_GEmTC_Data_Sheet.csv",
+                    header = TRUE, sep = ",")
+
+MetaSet <- read.csv("C:/Users/jacop/Documents/4.NI-BrainStimPD/Data/Meta_Data_Sheet.csv",
+                    header = TRUE, sep = ",")
+
+Gemtc_treat.code <- read.csv("C:/Users/jacop/Documents/4.NI-BrainStimPD/Data/gemtc_treat_code.csv",
+                     header = TRUE, sep = ",")
+
+```
+
+################################################################################ 
+
+#### PREPARE OUTCOMES
+
+################################################################################ 
+
+```{r}
+
+## SUBJECTIVE: Questionnaires at T1.
+# Filter out rows to keep only the post-treatment subjective scores (Q)
+
+dataset_1 <- dataset
+              
+```
+
+####################### 
+
+### WITHIN CHANGES
+
+####################### 
+
+```{r rho}
+
+# CALCULATE THE SD_diff and the SMD 
+# DEFINE Correlation Coefficient ##
+
+  rho_s1 = 0.3
+  rho_s2 = 0.4
+  rho_s3 = 0.5
+  rho_s4 = 0.6
+  rho_s5 = 0.7
+  rho_s6 = 0.8
+
+# calculate SMD #
+
+# rho 0.3
+dataset_1$sd_diff_s1 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s1 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s1 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s1))))
+
+dataset_1$se_diff_s1 <- sqrt(((2 * (1 - rho_s1)) / dataset_1$post_N )
+                        + (dataset_1$SMD_s1^2 / (2 * dataset_1$post_N)))
+
+
+
+# rho 0.4
+dataset_1$sd_diff_s2 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s2 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s2 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s2))))
+
+dataset_1$se_diff_s2 <- sqrt(((2 * (1 - rho_s2)) / dataset_1$post_N )
+                        + (dataset_1$SMD_s2^2 / (2 * dataset_1$post_N)))
+
+
+
+# rho 0.5
+dataset_1$sd_diff_s3 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s3 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s3 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s3))))
+
+dataset_1$se_diff_s3 <- sqrt(((2 * (1 - rho_s3)) / dataset_1$post_N )
+                        + (dataset_1$SMD_s3^2 / (2 * dataset_1$post_N)))
+
+
+
+# rho 0.6
+dataset_1$sd_diff_s4 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s4 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s4 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s4))))
+
+dataset_1$se_diff_s4 <- sqrt(((2 * (1 - rho_s4)) / dataset_1$post_N )
+                        + (dataset_1$SMD_s4^2 / (2 * dataset_1$post_N)))
+
+
+
+# rho 0.7
+dataset_1$sd_diff_s5 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s5 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s5 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s5))))
+
+dataset_1$se_diff_s5 <- sqrt(((2 * (1 - rho_s5)) / dataset_1$post_N )
+                        + (dataset_1$SMD_s5^2 / (2 * dataset_1$post_N)))
+
+
+
+# rho 0.8
+dataset_1$sd_diff_s6 <- sqrt(dataset_1$post_SD^2 + dataset_1$pre_SD^2
+                        - 2 * rho_s6 * dataset_1$post_SD * dataset_1$pre_SD)
+
+dataset_1$SMD_s6 <- dataset_1$Mean_Diff / ((sqrt((dataset_1$post_SD^2 + dataset_1$pre_SD^2) / 2))
+                    / (sqrt(2 *(1 - rho_s6))))
+
+dataset_1$se_diff_s6 <- sqrt(((2 * (1 - rho_s6)) / dataset_1$post_N)
+                        + (dataset_1$SMD_s6^2 / (2 * dataset_1$post_N)))
+
+```
+
+##################### 
+
+### CORRELATIONS
+
+##################### 
+
+```{r}
+
+# Check correlation Between SDM and SD/SE of change scores
+
+selected_data_SMD <- dataset_1[, c("SMD_s1", "SMD_s2", "SMD_s3",
+                                   "SMD_s4", "SMD_s5", "SMD_s6")]
+
+selected_data_sd_diff <- dataset_1[, c("sd_diff_s1", "sd_diff_s2", "sd_diff_s3",
+                                       "sd_diff_s4", "sd_diff_s5", "sd_diff_s6")]
+
+selected_data_se_diff <- dataset_1[, c("se_diff_s1", "se_diff_s2","se_diff_s3",
+                                       "se_diff_s4", "se_diff_s5", "se_diff_s6")]
+
+# Corr
+cor_matrix_SMD <- cor(selected_data_SMD, method = "spearman")
+print(cor_matrix_SMD)
+corrplot(cor_matrix_SMD, method = "circle", type = "upper", tl.col = "black", tl.cex = 0.8)
+
+cor_matrix_sd_diff <- cor(selected_data_sd_diff, method = "spearman")
+print(cor_matrix_sd_diff)
+corrplot(cor_matrix_sd_diff, method = "circle", type = "upper", tl.col = "black", tl.cex = 0.8)
+
+cor_matrix_se_diff <- cor(selected_data_se_diff, method = "spearman")
+print(cor_matrix_se_diff)
+corrplot(cor_matrix_se_diff, method = "circle", type = "upper", tl.col = "black", tl.cex = 0.8)
+
+```
+
+################################################################################ 
+
+#### SUBJECTIVE
+
+################################################################################ 
+
+######################################################### 
+
+### PREP DATASETs for BUGSnet, GEmTC, and PCNETMETA
+
+######################################################### 
+
+```{r Data prep}
+
+Subjective_1 <- dataset_1 %>% filter(Dimension == "Subjective" & Tool == "Q")
+
+```
+
+```{r}
+
+## CONTRAST-BASED DATASETs
+
+## Include Wilkinson = CVS
+Subjective <- Subjective_1 %>% filter(!row_number() %in% c(1, 4, 7, 8, 17, 18, 27, 28, 33, 34, 39))
+
+                               ## 1     Antczak et al., 2011
+                               ## 4     Dobbs et al., 2018
+                               ## 7     Hadoush et al., 2018
+                               ## 8     Hadoush et al., 2021
+                               ## 17-18 Makkos et al., 2016 - ESS Scale out
+                               ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                               ## 29-30 Wilkinson et al., 2019 - CVS Out
+                               ## 33-34 Wang et al., 2023 - ESS Scale out
+                               ## 39    Zhang et al., 2022 - PSQI CON, no data
+
+  new_order <- as.vector(rbind(seq(2, nrow(Subjective), by = 2), seq(1, nrow(Subjective), by = 2)))
+  Subjective_netpma <- Subjective[new_order, ]
+
+
+
+## Remove Wilkinson = CVS
+Subjective_sens <- Subjective_1 %>% filter(!row_number() %in% c(1, 4, 7, 8, 17, 18, 27, 28, 29, 30, 33, 34, 39))
+
+                                    ## 1     Antczak et al., 2011
+                                    ## 4     Dobbs et al., 2018
+                                    ## 7     Hadoush et al., 2018
+                                    ## 8     Hadoush et al., 2021
+                                    ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                    ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                    ## 33-34 Wang et al., 2023 - ESS Scale out
+                                    ## 39    Zhang et al., 2022 - PSQI CON, no data
+
+  new_order_sens <- as.vector(rbind(seq(2, nrow(Subjective_sens), by = 2), seq(1, nrow(Subjective_sens), by = 2)))
+  Subjective_sens_pma <- Subjective_sens[new_order_sens, ]
+
+
+
+## Remove Khedr 2020-2024
+## Poor reporting & outlier in Funnel Plot
+
+Subjective_sens1 <- Subjective_1 %>% filter(!row_number() %in% c(1, 4, 7, 8, 9, 10, 11, 12, 17, 18, 27, 28, 33, 34, 39))
+
+                                     ## 1     Antczak et al., 2011
+                                     ## 4     Dobbs et al., 2018
+                                     ## 7     Hadoush et al., 2018
+                                     ## 8     Hadoush et al., 2021
+                                     ## 9-10  Khedr et al., 2020 out
+                                     ## 11-12 Khedr et al., 2024 out
+                                     ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                     ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                     ## 29-30 Wilkinson et al., 2019 - CVS Out
+                                     ## 33-34 Wang et al., 2023 - ESS Scale out
+                                     ## 39    Zhang et al., 2022 - PSQI CON, no data
+
+  new_order_sens1 <- as.vector(rbind(seq(2, nrow(Subjective_sens1), by = 2), seq(1, nrow(Subjective_sens1), by = 2)))
+  Subjective_sens1_pma <- Subjective_sens1[new_order_sens1, ]
+
+  
+## Remove Khedr 2024 & Keep Wilkinsons (CVS)
+
+Subjective_sens2 <- Subjective_1 %>% filter(!row_number() %in% c(1, 4, 7, 8, 11, 12, 17, 18, 27, 28, 33, 34, 39))
+
+                                     ## 1     Antczak et al., 2011
+                                     ## 4     Dobbs et al., 2018
+                                     ## 7     Hadoush et al., 2018
+                                     ## 8     Hadoush et al., 2021
+                                     ## 11-12 Khedr et al., 2024 out
+                                     ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                     ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                     ## 33-34 Wang et al., 2023 - ESS Scale out
+                                     ## 39    Zhang et al., 2022 - PSQI CON, no data
+
+  new_order_sens2 <- as.vector(rbind(seq(2, nrow(Subjective_sens2), by = 2), seq(1, nrow(Subjective_sens2), by = 2)))
+  Subjective_sens2_pma <- Subjective_sens2[new_order_sens2, ]
+  
+  
+## Remove Wang et al., 2023
+
+Subjective_sens3 <- Subjective_1 %>% filter(!row_number() %in% c(1, 4, 7, 8, 17, 18, 27, 28, 31:34, 39))
+
+                                     ## 1     Antczak et al., 2011
+                                     ## 4     Dobbs et al., 2018
+                                     ## 7     Hadoush et al., 2018
+                                     ## 8     Hadoush et al., 2021
+                                     ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                     ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                     ## 32-34 Wang et al., 2023 - out
+                                     ## 33-34 Wang et al., 2023 - ESS Scale out
+                                     ## 39    Zhang et al., 2022 - PSQI CON, no data
+
+  new_order_sens3 <- as.vector(rbind(seq(2, nrow(Subjective_sens3), by = 2), seq(1, nrow(Subjective_sens3), by = 2)))
+  Subjective_sens3_pma <- Subjective_sens3[new_order_sens3, ]  
+
+## By Questionnaire
+
+# PDSS
+Subjective_PDQues <- Subjective_1 %>% filter(Dimension == "Subjective" & Outcome %in% c("PDSS", "PDSS-2")
+                                      & study != "Antczak et al., 2011")
+
+  new_order1 <- as.vector(rbind(seq(2, nrow(Subjective_PDQues), by = 2), seq(1, nrow(Subjective_PDQues), by = 2)))
+  Subjective_PDQues_pma <- Subjective_PDQues[new_order1, ]
+
+
+# General Questionnaires
+Subjective_GenQues <- Subjective_1 %>% filter(Dimension == "Subjective" & Outcome %in% c("PSQI") & !(study %in%
+                                       c("Zhang et al., 2022", "Hadoush et al., 2018", "Hadoush et al., 2021")))
+
+  new_order2 <- as.vector(rbind(seq(2, nrow(Subjective_GenQues), by = 2), seq(1, nrow(Subjective_GenQues), by = 2)))
+  Subjective_GenQues_pma <- Subjective_GenQues[new_order2, ]
+
+
+# ESS
+Subjective_ESS <- Subjective_1 %>% filter(Dimension == "Subjective" & Outcome %in% c("ESS")
+                                   & study != "Wilkinson et al., 2019")
+
+  new_order3 <- as.vector(rbind(seq(2, nrow(Subjective_ESS), by = 2), seq(1, nrow(Subjective_ESS), by = 2)))
+  Subjective_ESS_pma <- Subjective_ESS[new_order3, ]
+
+
+# ESS and Include Wilkinson = CVS
+Subjective_ESS_sens <- Subjective_1 %>% filter(Dimension == "Subjective" & Outcome %in% c("ESS"))
+
+  new_order4 <- as.vector(rbind(seq(2, nrow(Subjective_ESS_sens), by = 2), seq(1, nrow(Subjective_ESS_sens), by = 2)))
+  Subjective_ESS_sens_pma <- Subjective_ESS_sens[new_order4, ]
+
+```
+
+```{r}
+
+## ARM-BASED DATASETs
+
+Subjective_AB <- Subjective_1 %>% filter(!row_number() %in% c(17, 18, 27, 28, 29, 30, 33, 34, 39))
+
+                                  ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                  ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                  ## 29-30 Wilkinson et al., 2019 - CVS Out
+                                  ## 33-34 Wang et al., 2023 - ESS Scale out
+                                  ## 39    Zhang et al., 2022 - PSQI Scale out - only INT group
+
+
+
+## Include Wilkinson = CVS
+Subjective_AB_sens1 <- Subjective_1 %>% filter(!row_number() %in% c(17, 18, 27, 28, 33, 34, 39))
+
+                                        ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                        ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                        ## 33-34 Wang et al., 2023 - ESS Scale out
+                                        ## 39    Zhang et al., 2022 - PSQI Scale out - only INT group
+
+
+
+## As main Arm-Based analysis, but use PSQI single-arm Zhang 2022 instead of ESS
+Subjective_ArmBased_sens2 <- Subjective_1 %>% filter(!row_number() %in% c(17, 18, 27, 28, 33, 34, 37, 38))
+
+                                              ## 17-18 Makkos et al., 2016 - ESS Scale out
+                                              ## 27-28 Shaheen et al., 2023 - ESS Scale out
+                                              ## 33-34 Wang et al., 2023 - ESS Scale out
+                                              ## 37-38 Zhang et al., 2022 - ESS Scale Out
+
+```
+
+################################################################################ 
+
+# BUGSnet
+
+################################################################################ 
+
+######################### 
+
+## DATA PREPARATION
+
+######################### 
+
+```{r BUGSnET}
+
+# Prep data using data.prep to conduct BUGSnet.
+
+# PLOT NETWORK and PMA
+nibs_subj <- data.prep(arm.data = Subjective_netpma,
+                       varname.t = "treatment",
+                       varname.s = "study"
+                       )
+
+nibs_subj_rTMS <- data.prep(arm.data = Subjective_netpma,
+                            varname.t = "treat_1",
+                            varname.s = "study"
+                            )
+
+nibs_subj_NIBS <- data.prep(arm.data = Subjective_netpma,
+                            varname.t = "treat_3",
+                            varname.s = "study"
+                            )
+
+# Include Wilknson = CVS
+nibs_subj_sens <- data.prep(arm.data = Subjective_sens_pma,
+                            varname.t = "treat_3",
+                            varname.s = "study"
+                            )
+
+nibs_subj_sens_net <- data.prep(arm.data = Subjective_sens_pma,
+                                varname.t = "treatment",
+                                varname.s = "study"
+                                )
+
+# Exclude Khedr 2020 and 2024
+nibs_subj_sens1 <- data.prep(arm.data = Subjective_sens1_pma,
+                             varname.t = "treat_3",
+                             varname.s = "study"
+                             )
+
+nibs_subj_sens2 <- data.prep(arm.data = Subjective_sens2_pma,
+                             varname.t = "treat_3",
+                             varname.s = "study"
+                             )
+
+nibs_subj_sens3 <- data.prep(arm.data = Subjective_sens3_pma,
+                             varname.t = "treat_3",
+                             varname.s = "study"
+                             )
+
+nibs_subj_sens4 <- data.prep(arm.data = Subjective_sens3_pma,
+                             varname.t = "treatment",
+                             varname.s = "study"
+                             )
+
+####  ####  ####  ####  ####  ####  ####  ####  ####
+
+
+# Run Analysis ~ Subjective & _sens
+nibs_subj_cb <- data.prep(arm.data = Subjective,
+                          varname.t = "Node",
+                          varname.s = "study"
+                          )
+
+
+## Include Wilkinson = CVS
+nibs_subj_cb_sens <- data.prep(arm.data = Subjective_sens,
+                               varname.t = "Node",
+                               varname.s = "study"
+                               )
+
+
+## Remove Khedr 2020-2024 due to poor reporting and outliers
+nibs_subj_cb_sens1 <- data.prep(arm.data = Subjective_sens1,
+                                varname.t = "Node",
+                                varname.s = "study"
+                                )
+
+## Remove Khedr 2024 & keep Wilkinsons
+nibs_subj_cb_sens2 <- data.prep(arm.data = Subjective_sens2,
+                                varname.t = "Node",
+                                varname.s = "study"
+                                )
+
+## Remove Wang 2023
+nibs_subj_cb_sens3 <- data.prep(arm.data = Subjective_sens3,
+                                varname.t = "Node",
+                                varname.s = "study"
+                                )
+
+
+####  ####  ####  ####  ####  ####  ####  ####  ####
+
+
+nibs_subj_PDQues <- data.prep(arm.data = Subjective_PDQues_pma,
+                                 varname.t = "treat_3",
+                                 varname.s = "study"
+                                 )
+
+
+nibs_subj_GenQues <- data.prep(arm.data = Subjective_GenQues_pma,
+                                  varname.t = "treat_3",
+                                  varname.s = "study"
+                                  )
+
+
+nibs_subj_ESS <- data.prep(arm.data = Subjective_ESS_pma,
+                              varname.t = "treat_3",
+                              varname.s = "study"
+                              )
+
+
+nibs_subj_ESS_sens <- data.prep(arm.data = Subjective_ESS_sens_pma,
+                                   varname.t = "treat_3",
+                                   varname.s = "study"
+                                   )
+
+```
+
+####################################### 
+
+## HOMOGENEITY TESTS: COVARIATES
+
+####################################### 
+
+############################# 
+
+## NIBS Characteristics
+
+############################# 
+
+```{r}
+
+#### HOGENEITY ASSESSMENT ####
+#### Data.plot ##############
+
+# Data.plot is used to plot the AVG+SD of the main covariates to explore their variability, and take educated     and informative decisions on whether or not conduct meta-regressions/sub-group analysis.
+
+# Plot EndPoint Time - duration between T0 and T1.
+data.plot(data = nibs_subj,
+          covariate = "EP.days.", 
+          half.length = NULL,
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot Number of NIBS sessions.
+data.plot(data = nibs_subj,
+          covariate = "NIBS.Sess.", 
+          half.length = NULL,
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot TMS protocol HF/LF Intensity.
+data.plot(data = nibs_subj,
+          covariate = "rTMS_Hz", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot TMS Intensity compared to RMT.
+data.plot(data = nibs_subj,
+          covariate = "TMS_Int...", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot tDCS Intensity (mA)
+data.plot(data = nibs_subj,
+          covariate = "tDCS_mA", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot TMS Pulses per session.
+data.plot(data = nibs_subj,
+          covariate = "TMS_Sess.pulses", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot TMS Total Pulses throughout the protocol (Pulses/session X Days of Treatment).
+data.plot(data = nibs_subj,
+          covariate = "TMS_Tot.pulses", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot tDCS/CVS Session Duration (min).
+data.plot(data = nibs_subj,
+          covariate = "tDCS.CVS_Sess.min", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot tDCS/CVS overall Duration (min) throughout the protocol (Session(min) X Days of Treatment).
+data.plot(data = nibs_subj,
+          covariate = "tDCS.CVS_tot.min", 
+          half.length = NULL,
+          by = "treatment",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot NIBS Target.
+data.plot(data = nibs_subj,
+          covariate = "NIBS.Target.1", 
+          half.length = NULL,
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+```
+
+## JC Comments:
+
+###1. Remove Wilkinson et al., due to the different intervention duration and a sensitivity analisys to see whether by including it, the ranking and effect of other intervention changes. Done.
+
+###2. Meta-Regression for rTMS studies looking at the RTM%, TMS pulses per session and overall.
+
+###3. Meta-Regression for rTMS studies looking at the Target.
+
+###################################### 
+
+## Participants Characteristics
+
+###################################### 
+
+```{r}
+# Plot Age
+data.plot(data = nibs_subj,
+          covariate = "Age_mean", 
+          half.length = "Age_sd",
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot Sex Ratio
+data.plot(data = nibs_subj,
+          covariate = "sex_ratio.F.Tot.", 
+          half.length = NULL,
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot Disease Duration
+data.plot(data = nibs_subj,
+          covariate = "base_DD_mean", 
+          half.length = "base_DD_sd",
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot LEDD
+data.plot(data = nibs_subj,
+          covariate = "base_all_LEDD_mean", 
+          half.length = "base_all_LEDD_sd",
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot HYs
+data.plot(data = nibs_subj,
+          covariate = "base_HY_mean", 
+          half.length = "base_HY_sd",
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+# Plot UPDRSIII
+data.plot(data = nibs_subj,
+          covariate = "base_UPDRSIII_mean", 
+          half.length = "base_UPDRSIII_sd",
+          by = "study",
+          avg.hline = TRUE, #add overall average line?
+          text.size = 12
+          )
+
+```
+
+## JC Comments:
+
+###1. Network Meta-Regression for Sex.Ratio
+
+###2. Remove again Wilkinson et al., - DD sign difference between groups. Done.
+
+################################################ 
+
+#### HOMOGENEITY TESTS: HETEROGENEITY PWMA
+
+################################################ 
+
+```{r}
+
+#### HOGENEITY ASSESSMENT ####
+#### rTMS ####
+
+png("PMA_plot_rTMS.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_rTMS,
+    name.trt1 = "CON",
+    name.trt2 = "rTMS",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_rTMS_HF.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj,
+    name.trt1 = "CON",
+    name.trt2 = "rTMS_HF",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_rTMS_LF.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj,
+    name.trt1 = "CON",
+    name.trt2 = "rTMS_LF",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+```
+
+## JC Comments:
+
+###1. PMA looking good with heterogeneity below 40% and non-significant
+
+```{r}
+
+#### tDCS ####
+
+png("PMA_plot_tDCS.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj,
+    name.trt1 = "CON",
+    name.trt2 = "tDCS",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+```
+
+## JC Comments:
+
+###1. PMA looking good with heterogeneity 0%
+
+############################## 
+
+## Sensitivity analysis
+
+############################## 
+
+```{r}
+
+## Include CVS - Wilkinson et al., ##
+
+png("PMA_plot_sens_Wilkinsons.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_sens,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+
+## Exclude Khedr 2020 and 2024 ##
+
+png("PMA_plot_sens1_Khedrs_20-24_out.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_sens1,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_sens2_Wilkinson_in&Khedr24_in.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_sens2,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_sens3_Wang2023.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_sens3,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_sens3_Wang2023_LF.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_sens4,
+    name.trt1 = "rTMS_LF",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+```
+
+## JC Comments:
+
+###1. Looking good. Heterogenaity very low.
+
+###2. Khedr 2020 and 2024 driving the positive effect of rTMS_HF
+
+############################### 
+
+## Sensitivity Analysis
+
+## Different SD for PMA
+
+############################### 
+
+```{r}
+
+png("PMA_plot_NIBS_sensSD1.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s1",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_sensSD2.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s2",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_sensSD3.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s3",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_sensSD4.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s4",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_sensSD5.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s5",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_sensSD6.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_NIBS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_s6",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+```
+
+```{r}
+
+#### HOGENEITY ASSESSMENT ####
+#### PDQues ####
+
+png("PMA_plot_NIBS_PDQues.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_PDQues,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff", #Mean_Diff #SMD #post_Mean
+    N = "post_N",
+    sd = "sd_diff_w", #sd_diff #post_SD
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+################
+#### GenQues ####
+
+png("PMA_plot_NIBS_GenQues.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_GenQues,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+############
+#### ESS ####
+
+png("PMA_plot_NIBS_ESS.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_ESS,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+png("PMA_plot_NIBS_ESS_sens.png", width = 1800, height = 800, res = 150)
+pma(data = nibs_subj_ESS_sens,
+    name.trt1 = "NIBS",
+    name.trt2 = "CON",
+    outcome = "Mean_Diff",
+    N = "post_N",
+    sd = "sd_diff_w",
+    type.outcome = "continuous",
+    method = "REML",
+    method.tau = "REML",
+    sm = "SMD"
+    )
+dev.off()
+
+```
+
+## JC Comments:
+
+###1. GenQues driving the effect(s) and all from China. ESS and PD-related questionnaires NO EFFECTS.
+
+################################################################################ 
+
+################################################################################ 
+
+################################################################################ 
+
+############################## 
+
+## NIBS_SUBJ DATASET
+
+## Network Description
+
+############################## 
+
+```{r BUGSnET Run Model}
+
+#### DESCRIPTION OF NETWORK ####
+#Plot Net. To check the Network Plot - numbers of treatments and comparisons.
+
+png("Network.png", width = 1800, height = 800, res = 150)
+par(mar=c(1,1,1,1)) #reduce margins for nicer plotting
+net.plot(nibs_subj, 
+         node.scale = 8,
+         edge.scale= 3,
+         node.lab.cex = 1,
+         study.counts = TRUE
+         )
+dev.off()
+
+# Network characteristic summary tables. The output provides three summary tables:
+# 1. Network Characteristics Table
+# 2. Intervention Table
+# 3. Comparison Table, showing all the direct comparisons.
+
+network.char <- net.tab(data = nibs_subj,
+                        outcome = "diff", #SMD #Mean_Diff
+                        N = "post_N",
+                        type.outcome = "continuous")
+network.char
+
+```
+
+################################ 
+
+## BNMA undefined PRIORS
+
+################################ 
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# RANDOM MODEL ################
+
+RE_model <- nma.model.contrast(data = nibs_subj_cb,
+                               differences = "diff",
+                               se.diff = "std.err",
+                               var.arm1 = NULL,
+                               # outcome = "SMD", #SMD #Mean_Diff
+                               # N = "post_N",
+                               # sd = "sd_diff", #se_diff #sd_diff
+                               reference = "1",
+                               type = "consistency",
+                               # family = "normal",
+                               # link = "identity",
+                               # time ="followUp",
+                               effects = "random",
+                               scale = "Mean Difference"
+                               # prior.mu = "dnorm(0,0.0001)",
+                               # prior.d = "dnorm(0,0.0001)",
+                               # prior.sigma = "dunif(0,25)",
+                               # prior.beta = "EXCHANGEABLE",
+                               # covariate = "Node_1",
+                               )
+
+RE_results <- nma.run(RE_model,
+                      n.adapt = 5000,
+                      n.burnin = 100000,
+                      n.iter = 200000,
+                      n.chains = 3,
+                      thin = 10
+                      )
+
+nma.diag(RE_results)
+
+```
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# FIXED  MODEL ################
+
+FE_model <- nma.model.contrast(data = nibs_subj_cb,
+                               differences = "diff",
+                               se.diff = "std.err",
+                               var.arm1 = NULL,
+                               # outcome = "SMD", #SMD #Mean_Diff
+                               # N = "post_N",
+                               # sd = "sd_diff", #se_diff #sd_diff
+                               reference = "1",
+                               type = "consistency",
+                               # family = "normal",
+                               # link = "identity",
+                               # time ="followUp",
+                               effects = "fixed",
+                               scale = "Mean Difference"
+                               # prior.mu = "dnorm(0,0.0001)",
+                               # prior.d = "dnorm(0,0.0001)",
+                               # prior.sigma = "dunif(0,25)",
+                               # prior.beta = "EXCHANGEABLE",
+                               # covariate = "Node_1",
+                               )
+
+FE_results <- nma.run(FE_model,
+                      n.adapt = 5000,
+                      n.burnin = 100000,
+                      n.iter = 200000,
+                      n.chains = 3,
+                      thin = 10
+                      )
+
+nma.diag(FE_results)
+
+```
+
+```{r}
+
+par(mfrow = c(1,2))
+fe_model_fit <- nma.fit(FE_results, main = "FE Model SMD")
+re_model_fit <- nma.fit(RE_results, main = "RE Model SMD")
+
+png("NMA_DIC.png", width = 1800, height = 800, res = 150)
+par(mfrow = c(1,2))
+fe_model_fit <- nma.fit(FE_results, main = "FE Model SMD")
+re_model_fit <- nma.fit(RE_results, main = "RE Model SMD")
+dev.off()
+
+```
+
+```{r}
+
+## NMA.FOREST
+
+RE_Main <- nma.forest(RE_results,
+                      central.tdcy = "mean", #median
+                      comparator = "1",
+                      log.scale = FALSE,
+                      # cov.value = 7,
+                      )
+
+nma.forest(RE_results,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+nma.forest(FE_results,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+png("NMA_ForestPlot_RE.png", width = 1800, height = 800, res = 150)
+nma.forest(RE_results,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+dev.off()
+
+png("NMA_ForestPlot_FE.png", width = 1800, height = 800, res = 150)
+nma.forest(FE_results,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+dev.off()
+
+```
+
+```{r}
+
+## SUCRA PLOT.
+# Tabular and graphical results for treatment ranking including Surface under the cumulative ranking curve        (SUCRA) plot.
+
+sucra.out_RE <- nma.rank(RE_results,
+                         largerbetter = TRUE,
+                         sucra.palette = "Set1", #Set1 #Blues #Greens #Purples #Greys
+                         ranko.palette = "Blues", #Set1 #Blues #Greens #Purples #Greys
+                         )
+
+sucra.out_RE$ranktable
+sucra.out_RE$sucratable
+sucra.out_RE$sucraplot
+sucra.out_RE$rankogram
+
+png("NMA_SUCRA.png", width = 1800, height = 800, res = 150)
+sucra.out_RE$sucraplot
+dev.off()
+
+```
+
+```{r}
+
+## NMA.LEAGUE
+
+league.out_RE <- nma.league(RE_results,
+                            central.tdcy = "mean",
+                            order = sucra.out_RE$order,
+                            log.scale = FALSE,
+                            low.colour = "red",
+                            mid.colour = "white",
+                            high.colour = "springgreen3",
+                            digits = 2
+                            )
+
+league.out_RE
+
+```
+
+```{r}
+
+sink("league.out_RE.txt")
+print(league.out_RE)
+sink()
+
+```
+
+################################# 
+
+## CONSISTENCY ASSESSMENT
+
+```{r}
+
+## INCONSISTENT MODEL
+
+re_inconsistency_model <- nma.model.contrast(data = nibs_subj_cb,
+                                             differences = "diff",
+                                             se.diff = "std.err",
+                                             var.arm1 = NULL,
+                                             # outcome = "SMD", #SMD #Mean_Diff
+                                             # N = "post_N",
+                                             # sd = "sd_diff", #se_diff #sd_diff
+                                             reference = "1",
+                                             type = "inconsistency",
+                                             # family = "normal",
+                                             # link = "identity",
+                                             # time ="followUp",
+                                             effects = "random",
+                                             scale = "Mean Difference"
+                                             # prior.mu = "dnorm(0,0.0001)",
+                                             # prior.d = "dnorm(0,0.0001)",
+                                             # prior.sigma = "dunif(0,25)",
+                                             # prior.beta = "EXCHANGEABLE",
+                                             # covariate = "Node_1",
+                                             )
+
+
+re_inconsistency_results <- nma.run(re_inconsistency_model,
+                                    n.adapt = 5000,
+                                    n.burnin = 100000,
+                                    n.iter = 200000,
+                                    n.chains = 3,
+                                    thin = 10
+                                    )
+
+```
+
+```{r}
+
+## Consistency
+# Compare consistent and inconsistent model for RE with and without Priors
+
+par(mfrow = c(1,2))
+  re_model_fit <- nma.fit(RE_results, main = "RE Model")
+  mtext("Consistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+  
+  inconsist_model_fit_re <- nma.fit(re_inconsistency_results, main= "RE Model")
+  mtext("Inconsistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+
+  
+par(mfrow = c(1,1))
+  nma.compare(re_model_fit, inconsist_model_fit_re)
+  title(main = "Random-Effects Models")
+
+
+png("NMA_DIC_Consistency.png", width = 1800, height = 800, res = 150)
+par(mfrow = c(1,2))
+  re_model_fit <- nma.fit(RE_results, main = "RE Model")
+  mtext("Consistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+  
+  inconsist_model_fit_re <- nma.fit(re_inconsistency_results, main= "RE Model")
+  mtext("Inconsistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+dev.off()
+
+png("NMA_CompareFit.png", width = 1800, height = 800, res = 150)
+  par(mfrow = c(1,2))
+  nma.compare(re_model_fit, inconsist_model_fit_re)
+  title(main = "Random-Effects Models")
+dev.off()
+
+
+```
+
+############################## 
+
+## SENSITIVITY ANALYSIS
+
+############################## 
+
+#################### 
+
+### Khedrs out
+
+#################### 
+
+```{r Sensitivity analysis}
+
+RE_model_sens1 <- nma.model.contrast(data = nibs_subj_cb_sens1,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "random",
+                                     scale = "Mean Difference"
+                                     # prior.mu = "dnorm(0,0.0001)",
+                                     # prior.d = "dnorm(0,0.0001)",
+                                     # prior.sigma = "dunif(0,25)",
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+
+RE_results_sens1 <- nma.run(RE_model_sens1,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                            )
+
+nma.diag(RE_results_sens1)
+
+```
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# FIXED  MODEL ################
+
+FE_model_sens1 <- nma.model.contrast(data = nibs_subj_cb_sens1,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "fixed",
+                                     scale = "Mean Difference"
+                                     # prior.mu = "dnorm(0,0.0001)",
+                                     # prior.d = "dnorm(0,0.0001)",
+                                     # prior.sigma = "dunif(0,25)",
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+
+FE_results_sens1 <- nma.run(FE_model_sens1,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                            )
+
+nma.diag(FE_results_sens1)
+
+```
+
+```{r}
+
+par(mfrow = c(1,2))
+fe_model_fit_sens1 <- nma.fit(FE_results_sens1, main = "FE Model SMD")
+re_model_fit_sens1 <- nma.fit(RE_results_sens1, main = "RE Model SMD")
+
+```
+
+```{r}
+
+## NMA.FOREST
+
+nma.forest(RE_results_sens1,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+nma.forest(FE_results_sens1,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+# png("NMA_ForestPlot_RE_sens1.png", width = 1800, height = 800, res = 150)
+# nma.forest(RE_results_sens1,
+#            central.tdcy = "mean", #median
+#            comparator = "1",
+#            log.scale = FALSE,
+#            # cov.value = 7,
+#            )
+# dev.off()
+# 
+# png("NMA_ForestPlot_FE_sens1.png", width = 1800, height = 800, res = 150)
+# nma.forest(FE_results_sens1,
+#            central.tdcy = "mean", #median
+#            comparator = "1",
+#            log.scale = FALSE,
+#            # cov.value = 7,
+#            )
+# dev.off()
+
+```
+
+```{r}
+
+## SUCRA PLOT.
+# Tabular and graphical results for treatment ranking including Surface under the cumulative ranking curve        (SUCRA) plot.
+
+sucra.out_FE_sens1 <- nma.rank(FE_results_sens1,
+                               largerbetter = TRUE,
+                               sucra.palette = "Set1", #Set1 #Blues #Greens #Purples #Greys
+                               ranko.palette = "Blues", #Set1 #Blues #Greens #Purples #Greys
+                               )
+
+sucra.out_FE_sens1$ranktable
+sucra.out_FE_sens1$sucratable
+sucra.out_FE_sens1$sucraplot
+sucra.out_FE_sens1$rankogram
+
+# png("NMA_SUCRA_sens1.png", width = 1800, height = 800, res = 150)
+# sucra.out_FE_sens1$sucraplot
+# dev.off()
+
+```
+
+```{r}
+
+## NMA.LEAGUE
+
+league.out_FE_sens1 <- nma.league(FE_results_sens1,
+                                  central.tdcy = "mean",
+                                  order = sucra.out_FE_sens1$order,
+                                  log.scale = FALSE,
+                                  low.colour = "red",
+                                  mid.colour = "white",
+                                  high.colour = "springgreen3",
+                                  digits = 2
+                                  )
+
+league.out_FE_sens1$heatplot
+
+```
+
+################################ 
+
+### CONSISTENCY ASSESSMENT
+
+```{r}
+
+## INCONSISTENT MODEL
+
+fe_inconsistency_model_sens1 <- nma.model.contrast(data = nibs_subj_cb_sens1,
+                                                   differences = "diff",
+                                                   se.diff = "std.err",
+                                                   var.arm1 = NULL,
+                                                   # outcome = "SMD", #SMD #Mean_Diff
+                                                   # N = "post_N",
+                                                   # sd = "sd_diff", #se_diff #sd_diff
+                                                   reference = "1",
+                                                   type = "inconsistency",
+                                                   # family = "normal",
+                                                   # link = "identity",
+                                                   # time ="followUp",
+                                                   effects = "fixed",
+                                                   scale = "Mean Difference"
+                                                   # prior.mu = "dnorm(0,0.0001)",
+                                                   # prior.d = "dnorm(0,0.0001)",
+                                                   # prior.sigma = "dunif(0,25)",
+                                                   # prior.beta = "EXCHANGEABLE",
+                                                   # covariate = "Node_1",
+                                                   )
+
+
+fe_inconsistency_results_sens1 <- nma.run(fe_inconsistency_model_sens1,
+                                          n.adapt = 5000,
+                                          n.burnin = 100000,
+                                          n.iter = 200000,
+                                          n.chains = 3,
+                                          thin = 10
+                                          )
+
+```
+
+```{r}
+
+## Consistency
+# Compare consistent and inconsistent model for RE with and without Priors
+
+par(mfrow = c(1,2))
+  fe_model_fit_sens1 <- nma.fit(FE_results_sens1, main = "FE Model")
+  mtext("Consistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+  
+  inconsist_model_fit_fe_sens1 <- nma.fit(fe_inconsistency_results_sens1, main= "FE Model")
+  mtext("Inconsistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+
+  
+par(mfrow = c(1,1))
+  nma.compare(fe_model_fit_sens1, inconsist_model_fit_fe_sens1)
+  title(main = "Fixed-Effects Models")
+
+```
+
+############################# 
+
+## BNMA defining PRIORS
+
+############################# 
+
+```{r}
+
+RE_model_sens2 <- nma.model.contrast(data = nibs_subj_cb,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "random",
+                                     scale = "Mean Difference",
+                                     prior.mu = "dnorm(0,0.00001)",
+                                     prior.d = "dnorm(0.5,1)",
+                                     prior.sigma = "dunif(0,2)"
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+
+RE_results_sens2 <- nma.run(RE_model_sens2,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                            )
+
+nma.diag(RE_results_sens2)
+
+```
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# FIXED  MODEL ################
+
+FE_model_sens2 <- nma.model.contrast(data = nibs_subj_cb,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "fixed",
+                                     scale = "Mean Difference",
+                                     prior.mu = "dnorm(0,0.00001)",
+                                     prior.d = "dnorm(0.5,1)"
+                                     # prior.sigma = "dunif(0,2)",
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+
+FE_results_sens2 <- nma.run(FE_model_sens2,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                            )
+
+nma.diag(FE_results_sens2)
+
+```
+
+```{r}
+
+par(mfrow = c(1,2))
+fe_model_fit_sens2 <- nma.fit(FE_results_sens2, main = "FE Model SMD")
+re_model_fit_sens2 <- nma.fit(RE_results_sens2, main = "RE Model SMD")
+
+```
+
+```{r}
+
+## NMA.FOREST
+
+nma.forest(RE_results_sens2,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+nma.forest(FE_results_sens2,
+           central.tdcy = "mean", #median
+           comparator = "1",
+           log.scale = FALSE,
+           # cov.value = 7,
+           )
+
+# png("NMA_ForestPlot_RE_sens2.png", width = 1800, height = 800, res = 150)
+# nma.forest(RE_results_sens2,
+#            central.tdcy = "mean", #median
+#            comparator = "1",
+#            log.scale = FALSE,
+#            # cov.value = 7,
+#            )
+# dev.off()
+# 
+# png("NMA_ForestPlot_FE_sens2.png", width = 1800, height = 800, res = 150)
+# nma.forest(FE_results_sens2,
+#            central.tdcy = "mean", #median
+#            comparator = "1",
+#            log.scale = FALSE,
+#            # cov.value = 7,
+#            )
+# dev.off()
+
+```
+
+```{r}
+
+## SUCRA PLOT.
+# Tabular and graphical results for treatment ranking including Surface under the cumulative ranking curve        (SUCRA) plot.
+
+sucra.out_RE_sens2 <- nma.rank(RE_results_sens2,
+                               largerbetter = TRUE,
+                               sucra.palette = "Set1", #Set1 #Blues #Greens #Purples #Greys
+                               ranko.palette = "Blues", #Set1 #Blues #Greens #Purples #Greys
+                               )
+
+sucra.out_RE_sens2$ranktable
+sucra.out_RE_sens2$sucratable
+sucra.out_RE_sens2$sucraplot
+sucra.out_RE_sens2$rankogram
+
+# png("sucra.out_FE_sens2.png", width = 1800, height = 800, res = 150)
+# sucra.out_FE_sens2$sucraplot
+# dev.off()
+
+```
+
+```{r}
+
+## NMA.LEAGUE
+
+league.out_RE_sens2 <- nma.league(RE_results_sens2,
+                                  central.tdcy = "mean",
+                                  order = sucra.out_RE$order,
+                                  log.scale = FALSE,
+                                  low.colour = "red",
+                                  mid.colour = "white",
+                                  high.colour = "springgreen3",
+                                  digits = 2
+                                  )
+
+league.out_RE_sens2$heatplot
+
+```
+
+################################ 
+
+### CONSISTENCY ASSESSMENT
+
+```{r}
+
+## INCONSISTENT MODEL
+
+re_inconsistency_model_sens2 <- nma.model.contrast(data = nibs_subj_cb,
+                                                   differences = "diff",
+                                                   se.diff = "std.err",
+                                                   var.arm1 = NULL,
+                                                   # outcome = "SMD", #SMD #Mean_Diff
+                                                   # N = "post_N",
+                                                   # sd = "sd_diff", #se_diff #sd_diff
+                                                   reference = "1",
+                                                   type = "inconsistency",
+                                                   # family = "normal",
+                                                   # link = "identity",
+                                                   # time ="followUp",
+                                                   effects = "random",
+                                                   scale = "Mean Difference",
+                                                   prior.mu = "dnorm(0,0.00001)",
+                                                   prior.d = "dnorm(0.5,1)"
+                                                   # prior.sigma = "dunif(0,25)",
+                                                   # prior.beta = "EXCHANGEABLE",
+                                                   # covariate = "Node_1",
+                                                   )
+
+
+re_inconsistency_results_sens2 <- nma.run(re_inconsistency_model_sens2,
+                                          n.adapt = 5000,
+                                          n.burnin = 100000,
+                                          n.iter = 200000,
+                                          n.chains = 3,
+                                          thin = 10
+                                          )
+
+```
+
+```{r}
+
+## Consistency
+# Compare consistent and inconsistent model for RE with and without Priors
+
+par(mfrow = c(1,2))
+  re_model_fit_sens2 <- nma.fit(RE_results_sens2, main = "RE Model")
+  mtext("Consistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+  
+  inconsist_model_fit_re_sens2 <- nma.fit(re_inconsistency_results_sens2, main= "RE Model")
+  mtext("Inconsistent", side = 3, line = 0.3, adj = 0.5, cex = 1.2)
+
+  
+par(mfrow = c(1,1))
+  nma.compare(re_model_fit_sens2, inconsist_model_fit_re_sens2)
+  title(main = "Random-Effects Models")
+
+```
+
+################################# 
+
+### Exclluding Wilkinson - CVS
+
+################################# 
+
+```{r}
+
+#### DESCRIPTION OF NETWORK ####
+#Plot Net. To check the Network Plot - numbers of treatments and comparisons.
+
+par(mar=c(1,1,1,1)) #reduce margins for nicer plotting
+net.plot(nibs_subj_sens_net, 
+         node.scale = 8,
+         edge.scale=3,
+         node.lab.cex = 1,
+         study.counts = TRUE
+         )
+
+# Network characteristic summary tables. The output provides three summary tables:
+# 1. Network Characteristics Table
+# 2. Intervention Table
+# 3. Comparison Table, showing all the direct comparisons.
+
+network.char_s <- net.tab(data = nibs_subj_cb_sens,
+                           outcome = "diff",
+                           N = "post_N",
+                           type.outcome = "continuous")
+network.char_s
+
+```
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# RANDOM  MODEL NO PRIORS #####
+
+RE_model_sens <- nma.model.contrast(data = nibs_subj_cb_sens,
+                                    differences = "diff",
+                                    se.diff = "std.err",
+                                    var.arm1 = NULL,
+                                    # outcome = "SMD", #SMD #Mean_Diff
+                                    # N = "post_N",
+                                    # sd = "sd_diff", #se_diff #sd_diff
+                                    reference = "1",
+                                    type = "consistency",
+                                    # family = "normal",
+                                    # link = "identity",
+                                    # time ="followUp",
+                                    effects = "random",
+                                    scale = "Mean Difference",
+                                    # prior.mu = "dnorm(0,0.00001)",
+                                    # prior.d = "dnorm(0.5,1)"
+                                    # prior.sigma = "dunif(0,25)",
+                                    # prior.beta = "EXCHANGEABLE",
+                                    # covariate = "Node_1",
+                                    )
+                        
+RE_results_sens <- nma.run(RE_model_sens,
+                           n.adapt = 5000,
+                           n.burnin = 100000,
+                           n.iter = 200000,
+                           n.chains = 3,
+                           thin = 10
+                           )
+
+nma.diag(RE_results_sens)
+
+```
+
+```{r}
+
+# Fixed No Priors
+
+FE_model_sens <- nma.model.contrast(data = nibs_subj_cb_sens,
+                                    differences = "diff",
+                                    se.diff = "std.err",
+                                    var.arm1 = NULL,
+                                    # outcome = "SMD", #SMD #Mean_Diff
+                                    # N = "post_N",
+                                    # sd = "sd_diff", #se_diff #sd_diff
+                                    reference = "1",
+                                    type = "consistency",
+                                    # family = "normal",
+                                    # link = "identity",
+                                    # time ="followUp",
+                                    effects = "fixed",
+                                    scale = "Mean Difference",
+                                    # prior.mu = "dnorm(0,0.00001)",
+                                    # prior.d = "dnorm(0.5,1)"
+                                    # prior.sigma = "dunif(0,25)",
+                                    # prior.beta = "EXCHANGEABLE",
+                                    # covariate = "Node_1",
+                                    )
+                        
+FE_results_sens <- nma.run(FE_model_sens,
+                           n.adapt = 5000,
+                           n.burnin = 100000,
+                           n.iter = 200000,
+                           n.chains = 3,
+                           thin = 10
+                           )
+
+nma.diag(FE_results_sens)
+
+```
+
+```{r}
+
+par(mfrow = c(1,2))
+fe_model_fit_sens <- nma.fit(FE_results_sens, main = "Fixed Model")
+re_model_fit_sens <- nma.fit(RE_results_sens, main = "Random Model")
+
+```
+
+###################### 
+
+#### BNMA OUTPUTS
+
+###################### 
+
+```{r}
+
+## NMA.FOREST
+
+nma.forest(FE_results_sens,
+           central.tdcy = "mean", #median #mean
+           comparator = "1",
+           log.scale = FALSE
+           )
+
+nma.forest(RE_results_sens,
+           central.tdcy = "mean", #median #mean
+           comparator = "1",
+           log.scale = FALSE
+           )
+
+```
+
+```{r}
+
+## SUCRA PLOT.
+
+sucra.out_RE_sens <- nma.rank(RE_results_sens,
+                              largerbetter = TRUE,
+                              sucra.palette = "Set1", #Set1 #Blues #Greens #Purples #Greys
+                              ranko.palette = "Blues", #Set1 #Blues #Greens #Purples #Greys
+                              #cov.value = ,
+                              )
+
+sucra.out_RE_sens$ranktable
+sucra.out_RE_sens$sucratable
+sucra.out_RE_sens$sucraplot
+sucra.out_RE_sens$rankogram
+
+```
+
+```{r}
+
+## NMA.LEAGUE
+
+league.out_RE_sens <- nma.league(RE_results_sens,
+                                 central.tdcy = "mean",
+                                 order = sucra.out_RE_sens$order,
+                                 log.scale = FALSE,
+                                 low.colour = "red",
+                                 mid.colour = "white",
+                                 high.colour = "springgreen3",
+                                 digits = 2
+                                 )
+
+league.out_RE_sens$heatplot
+
+```
+
+```{r}
+
+sink("league.out_RE_sens.txt")
+print(league.out_RE_sens)
+sink()
+
+```
+
+################################ 
+
+### CONSISTENCY ASSESSMENT
+
+```{r}
+
+## INCONSISTENT MODEL
+
+re_inconsistency_model_sens <- nma.model.contrast(data = nibs_subj_cb_sens,
+                                                  differences = "diff",
+                                                  se.diff = "std.err",
+                                                  var.arm1 = NULL,
+                                                  # outcome = "SMD", #SMD #Mean_Diff
+                                                  # N = "post_N",
+                                                  # sd = "sd_diff", #se_diff #sd_diff
+                                                  reference = "1",
+                                                  type = "inconsistency",
+                                                  # family = "normal",
+                                                  # link = "identity",
+                                                  # time ="followUp",
+                                                  effects = "random",
+                                                  scale = "Mean Difference",
+                                                  # prior.mu = "dnorm(0,0.00001)",
+                                                  # prior.d = "dnorm(0.5,1)"
+                                                  # prior.sigma = "dunif(0,25)",
+                                                  # prior.beta = "EXCHANGEABLE",
+                                                  # covariate = "Node_1",
+                                                  )
+
+re_inconsistency_results_sens <- nma.run(re_inconsistency_model_sens,
+                                         n.adapt = 5000,
+                                         n.burnin = 100000,
+                                         n.iter = 200000,
+                                         n.chains = 3,
+                                         thin = 10
+                                         )
+
+```
+
+```{r}
+
+## Consistency
+# Compare consistent and inconsistent model for RE with and without Priors
+
+par(mfrow = c(1,2))
+  re_inconsist_model_fit_sens <- nma.fit(re_inconsistency_results_sens, main= "RE Inconsistent")
+  re_model_fit_sens <- nma.fit(RE_results_sens, main = "RE Consistent")
+dev.off()
+
+nma.compare(re_model_fit_sens, re_inconsist_model_fit_sens)
+
+```
+
+############################################################### 
+
+### Include Wilkinson - CVS and Remove outlier Khedr 2024
+
+############################################################### 
+
+```{r}
+
+#### DESCRIPTION OF NETWORK ####
+#Plot Net. To check the Network Plot - numbers of treatments and comparisons.
+
+# par(mar=c(1,1,1,1)) #reduce margins for nicer plotting
+# net.plot(nibs_subj_sens_net, 
+#          node.scale = 8,
+#          edge.scale=3,
+#          node.lab.cex = 1,
+#          study.counts = TRUE
+#          )
+
+# Network characteristic summary tables. The output provides three summary tables:
+# 1. Network Characteristics Table
+# 2. Intervention Table
+# 3. Comparison Table, showing all the direct comparisons.
+
+network.char_s3 <- net.tab(data = nibs_subj_cb_sens2,
+                           outcome = "diff",
+                           N = "post_N",
+                           type.outcome = "continuous")
+network.char_s3
+
+```
+
+```{r}
+
+#### NETWORK META-ANALYSIS ####
+## NMA.MODEL AND NMA.RUN ######
+# RANDOM  MODEL NO PRIORS #####
+
+RE_model_sens3 <- nma.model.contrast(data = nibs_subj_cb_sens2,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "random",
+                                     scale = "Mean Difference",
+                                     # prior.mu = "dnorm(0,0.00001)",
+                                     # prior.d = "dnorm(0.5,1)"
+                                     # prior.sigma = "dunif(0,25)",
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+                        
+RE_results_sens3 <- nma.run(RE_model_sens3,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                           )
+
+nma.diag(RE_results_sens3)
+
+```
+
+```{r}
+
+# Fixed No Priors
+
+FE_model_sens3 <- nma.model.contrast(data = nibs_subj_cb_sens2,
+                                     differences = "diff",
+                                     se.diff = "std.err",
+                                     var.arm1 = NULL,
+                                     # outcome = "SMD", #SMD #Mean_Diff
+                                     # N = "post_N",
+                                     # sd = "sd_diff", #se_diff #sd_diff
+                                     reference = "1",
+                                     type = "consistency",
+                                     # family = "normal",
+                                     # link = "identity",
+                                     # time ="followUp",
+                                     effects = "fixed",
+                                     scale = "Mean Difference",
+                                     # prior.mu = "dnorm(0,0.00001)",
+                                     # prior.d = "dnorm(0.5,1)"
+                                     # prior.sigma = "dunif(0,25)",
+                                     # prior.beta = "EXCHANGEABLE",
+                                     # covariate = "Node_1",
+                                     )
+                        
+FE_results_sens3 <- nma.run(FE_model_sens3,
+                            n.adapt = 5000,
+                            n.burnin = 100000,
+                            n.iter = 200000,
+                            n.chains = 3,
+                            thin = 10
+                           )
+
+nma.diag(FE_results_sens3)
+
+```
+
+```{r}
+
+par(mfrow = c(1,2))
+fe_model_fit_sens3 <- nma.fit(FE_results_sens3, main = "Fixed Model")
+re_model_fit_sens3 <- nma.fit(RE_results_sens3, main = "Random Model")
+
+```
+
+###################### 
+
+#### BNMA OUTPUTS
+
+###################### 
+
+```{r}
+
+## NMA.FOREST
+
+nma.forest(FE_results_sens3,
+           central.tdcy = "mean", #median #mean
+           comparator = "1",
+           log.scale = FALSE
+           )
+
+nma.forest(RE_results_sens3,
+           central.tdcy = "mean", #median #mean
+           comparator = "1",
+           log.scale = FALSE
+           )
+
+```
+
+```{r}
+
+## SUCRA PLOT.
+
+sucra.out_RE_sens3 <- nma.rank(RE_results_sens3,
+                               largerbetter = TRUE,
+                               sucra.palette = "Set1", #Set1 #Blues #Greens #Purples #Greys
+                               ranko.palette = "Blues", #Set1 #Blues #Greens #Purples #Greys
+                               #cov.value = ,
+                               )
+
+sucra.out_RE_sens3$ranktable
+sucra.out_RE_sens3$sucratable
+sucra.out_RE_sens3$sucraplot
+sucra.out_RE_sens3$rankogram
+
+```
+
+```{r}
+
+## NMA.LEAGUE
+
+league.out_RE_sens3 <- nma.league(RE_results_sens3,
+                                  central.tdcy = "mean",
+                                  order = sucra.out_RE_sens3$order,
+                                  log.scale = FALSE,
+                                  low.colour = "red",
+                                  mid.colour = "white",
+                                  high.colour = "springgreen3",
+                                  digits = 2
+                                  )
+
+league.out_RE_sens3$heatplot
+
+```
+
+```{r}
+
+league.out_RE_sens3$table
+
+```
+
+################################ 
+
+### CONSISTENCY ASSESSMENT
+
+```{r}
+
+## INCONSISTENT MODEL
+
+fe_inconsistency_model_sens3 <- nma.model.contrast(data = nibs_subj_cb_sens2,
+                                                   differences = "diff",
+                                                   se.diff = "std.err",
+                                                   var.arm1 = NULL,
+                                                   # outcome = "SMD", #SMD #Mean_Diff
+                                                   # N = "post_N",
+                                                   # sd = "sd_diff", #se_diff #sd_diff
+                                                   reference = "1",
+                                                   type = "inconsistency",
+                                                   # family = "normal",
+                                                   # link = "identity",
+                                                   # time ="followUp",
+                                                   effects = "fixed",
+                                                   scale = "Mean Difference",
+                                                   # prior.mu = "dnorm(0,0.00001)",
+                                                   # prior.d = "dnorm(0.5,1)"
+                                                   # prior.sigma = "dunif(0,25)",
+                                                   # prior.beta = "EXCHANGEABLE",
+                                                   # covariate = "Node_1",
+                                                   )
+
+fe_inconsistency_results_sens3 <- nma.run(fe_inconsistency_model_sens3,
+                                          n.adapt = 5000,
+                                          n.burnin = 100000,
+                                          n.iter = 200000,
+                                          n.chains = 3,
+                                          thin = 10
+                                          )
+
+```
+
+```{r}
+
+## Consistency
+# Compare consistent and inconsistent model for RE with and without Priors
+
+par(mfrow = c(1,2))
+  fe_inconsist_model_fit_sens3 <- nma.fit(fe_inconsistency_results_sens3, main= "FE Inconsistent")
+  fe_model_fit_sens3 <- nma.fit(FE_results_sens3, main = "FE Consistent")
+dev.off()
+
+nma.compare(fe_model_fit_sens3, fe_inconsist_model_fit_sens3)
+
+```
+
+################################################################################ 
+
+# Network Meta-Reg no PRIORS
+
+################################################################################ 
+
+#### Not possible to carry out Network Meta-Reg in nma.model.contrast
+
+################################################################################ 
+
+# GeMTC \~ Node-splitting analysis,Netwrok Meta Regressions & quality check
+
+################################################################################ 
+
+######################## 
+
+## Node-Splitting
+
+######################## 
+
+```{r}
+
+gemtc_treat.code <- Gemtc_treat.code %>%
+                    filter(!row_number() %in% c(5))
+
+```
+
+```{r}
+
+gemtc.subj <- mtc.network(data.re = Subjective,
+                          treatments = Gemtc_treat.code,
+                          description = "Network"
+                          )
+
+summary(gemtc.subj)
+
+plot(gemtc.subj)
+
+```
+
+```{r}
+
+model <- mtc.model(gemtc.subj,
+                   type = "consistency", #ume #use #consistency
+                   likelihood = "normal",
+                   link = "identity",
+                   linearModel = "random",
+                   n.chain = 3,
+                   om.scale=NULL,
+                   dic = TRUE
+                   )
+                   
+mcmc <- mtc.run(model, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc)
+
+gelman.plot(mcmc)
+
+gelman.diag(mcmc)$mpsrf
+
+```
+
+```{r}
+
+png("mcmc_plot.png", width = 1100, height = 1200)  # Save as PNG
+plot(mcmc)  # Create the plot
+dev.off()  # Close the device
+
+```
+
+```{r}
+
+mtc.nodesplit.comparisons(gemtc.subj)
+
+```
+
+```{r}
+
+# nodesplit <- mtc.nodesplit(gemtc.subj,
+#                            linearModel = "random",
+#                            likelihood = "normal",
+#                            link = "identity",
+#                            n.adapt = 5000,
+#                            n.iter = 200000,
+#                            thin = 10)
+# 
+# summary(nodesplit)
+
+```
+
+```{r}
+
+relative.effect.table(mcmc)
+summary(mcmc)
+
+MeanCrI <- round(summary(relative.effect(mcmc,"CON"))$summaries$quantiles[1:3,c("50%", "2.5%", "97.5%")], 2)
+paste(MeanCrI[, 1], "(", MeanCrI[, 2], ", ", MeanCrI[, 3], ")", sep="")
+
+```
+
+```{r}
+
+rank <- rank.probability(mcmc, preferredDirection = 1)
+
+plot(rank, beside=TRUE)
+
+
+```
+
+```{r}
+
+forest(relative.effect(mcmc, t1 = "CON"),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-0.75, 1.75))
+
+
+```
+
+```{r}
+
+library(dmetar)
+
+rank.probability <- rank.probability(mcmc)
+
+sucra <- dmetar::sucra(rank.probability, lower.is.better = FALSE)
+
+sucra
+
+plot(sucra)
+
+```
+
+################################### 
+
+### Exclude Wilkinson et al.,
+
+################################### 
+
+```{r}
+
+Gemtc.subj <- mtc.network(data.re = Subjective_sens,
+                          treatments = gemtc_treat.code,
+                          description = "Network"
+                          )
+
+summary(Gemtc.subj)
+
+plot(Gemtc.subj)
+
+```
+
+```{r}
+
+model_sens <- mtc.model(Gemtc.subj,
+                        type = "consistency", #ume #use #consistency
+                        likelihood = "normal",
+                        link = "identity",
+                        linearModel = "random",
+                        n.chain = 3,
+                        om.scale=NULL,
+                        dic = TRUE
+                        )
+                   
+mcmc_sens <- mtc.run(model_sens, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_sens)
+
+gelman.plot(mcmc_sens)
+
+gelman.diag(mcmc_sens)$mpsrf
+
+```
+
+```{r}
+
+png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+plot(mcmc_sens)  # Create the plot
+dev.off()  # Close the device
+
+```
+
+```{r}
+
+mtc.nodesplit.comparisons(Gemtc.subj)
+
+```
+
+```{r}
+
+# nodesplit <- mtc.nodesplit(Gemtc.subj,
+#                            linearModel = "random",
+#                            likelihood = "normal",
+#                            link = "identity",
+#                            n.adapt = 5000,
+#                            n.iter = 200000,
+#                            thin = 10)
+# 
+# summary(nodesplit)
+
+```
+
+```{r}
+
+rank_sens <- rank.probability(mcmc_sens, preferredDirection = 1)
+
+plot(rank_sens, beside=TRUE)
+
+```
+
+```{r}
+
+forest(relative.effect(mcmc_sens, t1 = "CON"),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-0.75, 1.75))
+
+```
+
+```{r}
+
+rank.probability_sens <- rank.probability(mcmc_sens)
+
+sucra_sens <- dmetar::sucra(rank.probability_sens, lower.is.better = FALSE)
+
+sucra_sens
+
+plot(sucra_sens)
+
+```
+
+############################### 
+
+## Network Meta-Regression
+
+############################### 
+
+################### 
+
+### NIBS Sessions
+
+```{r}
+
+Covariates <- Subjective[, c("study", "treatment", "NIBS.Sess.", "sex_ratio.F.Tot.", "Age_mean", "base_DD_mean",
+                             "region", "NIH_Per", "Mean_Diff_UPDRSIII", "ScalePD", "base_all_LEDD_mean", "base_HY_mean", "PO", "SleepIssue")]
+
+
+gemtc.subj_sessions <- mtc.network(data.re = Subjective,
+                                   treatments = Gemtc_treat.code,
+                                   studies = Covariates
+                                   )
+
+NIBS_Sess <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+                  variable = "NIBS.Sess.",
+                  control = "CON",
+                  class = NULL 
+                  )
+
+
+model_NIBS_Sess <- mtc.model(gemtc.subj_sessions,
+                             type = "regression", #ume #use #consistency
+                             likelihood = "normal",
+                             link = "identity",
+                             linearModel = "fixed",
+                             n.chain = 3,
+                             om.scale=NULL,
+                             dic = TRUE,
+                             regressor = NIBS_Sess
+                             )
+                   
+mcmc_NIBS_Sess <- mtc.run(model_NIBS_Sess, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_NIBS_Sess)
+
+gelman.plot(mcmc_NIBS_Sess)
+
+gelman.diag(mcmc_NIBS_Sess)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_NIBS_Sess)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by stimulation days = 10
+forest(relative.effect(mcmc_NIBS_Sess, t1 = "CON", covariate = 5),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_NIBS_Sess,
+                    t1 = "CON",
+                    t2 = "rTMS_HF", #"rTMS_LF", "tDCS",
+                    xlim=c(0, 20),
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_NIBS_Sess,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=c(0, 20),
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### Sleep POutcome
+
+```{r}
+
+Covariates_SPO <- Covariates;
+Covariates_SPO$SPO_numeric <- ifelse(Covariates_SPO$PO == "Sleep", 1, 0)
+
+gemtc.subj_reg_SPO <- mtc.network(data.re = Subjective,
+                                  treatments = Gemtc_treat.code,
+                                  studies = Covariates_SPO
+                                  )
+
+
+SPO <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+            variable = "SPO_numeric", # base_DD_mean" 
+            control = "CON",
+            class = NULL 
+            )
+
+
+model_PO <- mtc.model(gemtc.subj_reg_SPO,
+                      type = "regression", #ume #use #consistency
+                      likelihood = "normal",
+                      link = "identity",
+                      linearModel = "fixed",
+                      n.chain = 3,
+                      om.scale=NULL,
+                      dic = TRUE,
+                      regressor = SPO
+                      )
+                   
+mcmc_PO <- mtc.run(model_PO, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_PO)
+
+gelman.plot(mcmc_PO)
+
+gelman.diag(mcmc_PO)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_Sex_Ratio)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by Sex ratio = 0.7
+forest(relative.effect(mcmc_PO, t1 = "CON", covariate = 1),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1.25))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_PO,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_PO,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### Sleep Issues
+
+```{r}
+
+gemtc.subj_reg_SIs <- mtc.network(data.re = Subjective,
+                                  treatments = Gemtc_treat.code,
+                                  studies = Covariates
+                                  )
+
+
+SIs <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+            variable = "SleepIssue", # base_DD_mean" 
+            control = "CON",
+            class = NULL 
+            )
+
+
+model_SIs <- mtc.model(gemtc.subj_reg_SIs,
+                       type = "regression", #ume #use #consistency
+                       likelihood = "normal",
+                       link = "identity",
+                       linearModel = "fixed",
+                       n.chain = 3,
+                       om.scale=NULL,
+                       dic = TRUE,
+                       regressor = SIs
+                       )
+                   
+mcmc_SIs <- mtc.run(model_SIs, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_SIs)
+
+gelman.plot(mcmc_SIs)
+
+gelman.diag(mcmc_SIs)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_Sex_Ratio)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by Sex ratio = 0.7
+forest(relative.effect(mcmc_SIs, t1 = "CON", covariate = 0),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1.25))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_PO,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_PO,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### Sex Ratio
+
+```{r}
+
+sex_ratio <- Covariates[-c(5, 6), ]
+Subjective_sexRatio <- Subjective[-c(5, 6), ]
+
+
+gemtc.subj_reg_sex <- mtc.network(data.re = Subjective_sexRatio,
+                                  treatments = Gemtc_treat.code,
+                                  studies = sex_ratio
+                                  )
+
+
+Sex_Ratio <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+                  variable = "sex_ratio.F.Tot.", # "Age_mean", "base_DD_mean" 
+                  control = "CON",
+                  class = NULL 
+                  )
+
+
+model_Sex_Ratio <- mtc.model(gemtc.subj_reg_sex,
+                             type = "regression", #ume #use #consistency
+                             likelihood = "normal",
+                             link = "identity",
+                             linearModel = "fixed",
+                             n.chain = 3,
+                             om.scale=NULL,
+                             dic = TRUE,
+                             regressor = Sex_Ratio
+                             )
+                   
+mcmc_Sex_Ratio <- mtc.run(model_Sex_Ratio, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_Sex_Ratio)
+
+gelman.plot(mcmc_Sex_Ratio)
+
+gelman.diag(mcmc_Sex_Ratio)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_Sex_Ratio)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by Sex ratio = 0.7
+forest(relative.effect(mcmc_Sex_Ratio, t1 = "CON", covariate = 0.7),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1.25))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_Sex_Ratio,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_Sex_Ratio,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### Age_mean
+
+```{r}
+
+gemtc.subj_reg_age <- mtc.network(data.re = Subjective,
+                                  treatments = Gemtc_treat.code,
+                                  studies = Covariates
+                                  )
+
+
+Age_mean <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+                  variable = "Age_mean", # base_DD_mean" 
+                  control = "CON",
+                  class = NULL 
+                  )
+
+
+model_age <- mtc.model(gemtc.subj_reg_age,
+                       type = "regression", #ume #use #consistency
+                       likelihood = "normal",
+                       link = "identity",
+                       linearModel = "fixed",
+                       n.chain = 3,
+                       om.scale=NULL,
+                       dic = TRUE,
+                       regressor = Age_mean
+                       )
+                   
+mcmc_Age <- mtc.run(model_age, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_Age)
+
+gelman.plot(mcmc_Age)
+
+gelman.diag(mcmc_Age)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_Age)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using age = 75y
+forest(relative.effect(mcmc_Age, t1 = "CON", covariate = 65),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1.25, 1.25))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_Age,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_Age,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### LEDD
+
+```{r}
+
+ledd <- Covariates[-c(3, 4, 5, 6, 7, 8, 19, 20, 23, 24), ]
+Subjective_ledd <- Subjective[-c(3, 4, 5, 6, 7, 8, 19, 20, 23, 24), ]
+
+
+gemtc.subj_reg_ledd <- mtc.network(data.re = Subjective_ledd,
+                                  treatments = Gemtc_treat.code,
+                                  studies = ledd
+                                  )
+
+
+LEDD <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+           variable = "base_all_LEDD_mean",
+           control = "CON",
+           class = NULL 
+           )
+
+
+model_LEDD <- mtc.model(gemtc.subj_reg_ledd,
+                        type = "regression", #ume #use #consistency
+                        likelihood = "normal",
+                        link = "identity",
+                        linearModel = "fixed",
+                        n.chain = 3,
+                        om.scale=NULL,
+                        dic = TRUE,
+                        regressor = LEDD
+                        )
+                   
+mcmc_LEDD <- mtc.run(model_LEDD, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_LEDD)
+
+gelman.plot(mcmc_LEDD)
+
+gelman.diag(mcmc_LEDD)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_DD)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using age = 7y
+forest(relative.effect(mcmc_LEDD, t1 = "CON", covariate = 500),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1.5))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_LEDD,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_LEDD,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### H&Y
+
+```{r}
+
+HY <- Covariates[-c(3, 4, 5, 6, 7, 8, 19, 20, 23, 24), ]
+Subjective_HY <- Subjective[-c(3, 4, 5, 6, 7, 8, 19, 20, 23, 24), ]
+
+
+gemtc.subj_reg_HY <- mtc.network(data.re = Subjective_HY,
+                                 treatments = Gemtc_treat.code,
+                                 studies = HY
+                                 )
+
+
+HY <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+           variable = "base_HY_mean",
+           control = "CON",
+           class = NULL 
+           )
+
+
+model_HY <- mtc.model(gemtc.subj_reg_HY,
+                      type = "regression", #ume #use #consistency
+                      likelihood = "normal",
+                      link = "identity",
+                      linearModel = "fixed",
+                      n.chain = 3,
+                      om.scale=NULL,
+                      dic = TRUE,
+                      regressor = HY
+                      )
+                   
+mcmc_HY <- mtc.run(model_HY, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_HY)
+
+gelman.plot(mcmc_HY)
+
+gelman.diag(mcmc_HY)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_DD)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using age = 7y
+forest(relative.effect(mcmc_LEDD, t1 = "CON", covariate = 500),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 1.5))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_LEDD,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_LEDD,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+
+
+############## 
+
+### DD
+
+```{r}
+
+dd <- Covariates[-c(1, 2, 3, 4, 5, 6), ]
+Subjective_DD <- Subjective[-c(1, 2, 3, 4, 5, 6), ]
+
+
+gemtc.subj_reg_dd <- mtc.network(data.re = Subjective_DD,
+                                  treatments = Gemtc_treat.code,
+                                  studies = dd
+                                  )
+
+
+DD <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+           variable = "base_DD_mean",
+           control = "CON",
+           class = NULL 
+           )
+
+
+model_DD <- mtc.model(gemtc.subj_reg_dd,
+                      type = "regression", #ume #use #consistency
+                      likelihood = "normal",
+                      link = "identity",
+                      linearModel = "fixed",
+                      n.chain = 3,
+                      om.scale=NULL,
+                      dic = TRUE,
+                      regressor = DD
+                      )
+                   
+mcmc_DD <- mtc.run(model_DD, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_DD)
+
+gelman.plot(mcmc_DD)
+
+gelman.diag(mcmc_DD)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_DD)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using age = 7y
+forest(relative.effect(mcmc_DD, t1 = "CON", covariate = 7),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-0.75, 2))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_DD,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_DD,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### NIH
+
+```{r}
+
+gemtc.subj_reg_nih <- mtc.network(data.re = Subjective,
+                                  treatments = Gemtc_treat.code,
+                                  studies = Covariates
+                                  )
+
+
+NIH <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+            variable = "NIH_Per",
+            control = "CON",
+            class = NULL 
+            )
+
+
+model_NIH <- mtc.model(gemtc.subj_reg_nih,
+                       type = "regression", #ume #use #consistency
+                       likelihood = "normal",
+                       link = "identity",
+                       linearModel = "fixed",
+                       n.chain = 3,
+                       om.scale=NULL,
+                       dic = TRUE,
+                       regressor = NIH
+                       )
+                   
+mcmc_NIH <- mtc.run(model_NIH, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_NIH)
+
+gelman.plot(mcmc_NIH)
+
+gelman.diag(mcmc_NIH)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_DD)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using NIH = 75%
+forest(relative.effect(mcmc_NIH, t1 = "CON", covariate = 75),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-0.75, 1.5))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_NIH,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_NIH,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############## 
+
+### NIH
+
+#### Remove Khedrs 20-24 as outliers and bed reporting, same results one by one
+
+```{r}
+
+nih_2 <- Covariates[-c(7, 8), ]
+Subjective_nih_2 <- Subjective[-c(7, 8), ]
+
+
+gemtc.subj_reg_nih_2 <- mtc.network(data.re = Subjective_nih_2,
+                                    treatments = Gemtc_treat.code,
+                                    studies = nih_2
+                                    )
+
+
+NIH_2 <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+              variable = "NIH_Per",
+              control = "CON",
+              class = NULL 
+              )
+
+
+model_NIH_2 <- mtc.model(gemtc.subj_reg_nih_2,
+                         type = "regression", #ume #use #consistency
+                         likelihood = "normal",
+                         link = "identity",
+                         linearModel = "fixed",
+                         n.chain = 3,
+                         om.scale=NULL,
+                         dic = TRUE,
+                         regressor = NIH_2
+                         )
+                   
+mcmc_NIH_2 <- mtc.run(model_NIH_2, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_NIH_2)
+
+gelman.plot(mcmc_NIH_2)
+
+gelman.diag(mcmc_NIH_2)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_DD)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted using NIH = 75%
+forest(relative.effect(mcmc_NIH_2, t1 = "CON", covariate = 75),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-0.75, 1))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_NIH_2,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_NIH_2,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+############# 
+
+### Regions
+
+```{r}
+
+gemtc.subj_reg_region <- mtc.network(data.re = Subjective,
+                                  treatments = Gemtc_treat.code,
+                                  studies = Covariates
+                                  )
+
+
+Regions <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+                variable = "region",
+                control = "CON",
+                class = NULL 
+                )
+
+
+model_Region <- mtc.model(gemtc.subj_reg_region,
+                          type = "regression", #ume #use #consistency
+                          likelihood = "normal",
+                          link = "identity",
+                          linearModel = "fixed",
+                          n.chain = 3,
+                          om.scale=NULL,
+                          dic = TRUE,
+                          regressor = Regions
+                          )
+                   
+mcmc_Region <- mtc.run(model_Region, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_Region)
+
+gelman.plot(mcmc_Region)
+
+gelman.diag(mcmc_Region)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_Region)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by Country: China = 1 ~ Other countries = 0
+forest(relative.effect(mcmc_Region,
+                       t1 = "CON",
+                       covariate = 1),
+                       use.description = FALSE,
+                       xlim = c(-1.5, 1))
+                       title("China")
+forest(relative.effect(mcmc_Region,
+                       t1 = "CON",
+                       covariate = 0),
+                       use.description = FALSE,
+                       xlim = c(-0.75, 2))
+                       title("Other Countries")
+
+
+```
+
+```{r}
+
+# par(mfrow = c(1,2))
+# plotCovariateEffect(mcmc_NIH, t1 = "CON", t2 = "rTMS_HF",
+#                     xlim=NULL, ylim=NULL, ask=dev.interactive(orNone=TRUE))
+# 
+# plotCovariateEffect(mcmc_NIH, t1 = "CON",t2 = "rTMS_LF",
+#                     xlim=NULL, ylim=NULL, ask=dev.interactive(orNone=TRUE))
+
+```
+
+######################## 
+
+### UPDRS Change scores
+
+```{r}
+
+updrs <- Covariates[-c(1, 2, 3, 4, 5, 6, 7, 8, 23, 24, 27, 28), ]
+Subjective_updrs <- Subjective[-c(1, 2, 3, 4, 5, 6, 7, 8, 23, 24, 27, 28), ]
+
+gemtc.subj_reg_updrs <- mtc.network(data.re = Subjective_updrs,
+                                    treatments = Gemtc_treat.code,
+                                    studies = updrs
+                                    )
+
+
+UPDRS <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+              variable = "Mean_Diff_UPDRSIII",
+              control = "CON",
+              class = NULL 
+              )
+
+
+model_UPDRS <- mtc.model(gemtc.subj_reg_updrs,
+                         type = "regression", #ume #use #consistency
+                         likelihood = "normal",
+                         link = "identity",
+                         linearModel = "random",
+                         n.chain = 3,
+                         om.scale=NULL,
+                         dic = TRUE,
+                         regressor = UPDRS
+                         )
+                   
+mcmc_UPDRS <- mtc.run(model_UPDRS, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_UPDRS)
+
+gelman.plot(mcmc_UPDRS)
+
+gelman.diag(mcmc_UPDRS)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_UPDRS)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by UPDRS
+forest(relative.effect(mcmc_UPDRS, t1 = "CON", covariate = 5),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 2))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_UPDRS,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_UPDRS,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+## Positive Values reflect improvements in UPDRS score (=reduction in the scale)
+
+############################################### 
+
+### Questionnaires, PD = 1, General scales = 0
+
+```{r}
+
+gemtc.subj_reg_scale <- mtc.network(data.re = Subjective,
+                                    treatments = Gemtc_treat.code,
+                                    studies = Covariates
+                                    )
+
+
+Scale <- list(coefficient = "shared", # "shared", "unrelated", "exchangeable"
+              variable = "ScalePD",
+              control = "CON",
+              class = NULL 
+              )
+
+
+model_SCALE <- mtc.model(gemtc.subj_reg_scale,
+                         type = "regression", #ume #use #consistency
+                         likelihood = "normal",
+                         link = "identity",
+                         linearModel = "fixed",
+                         n.chain = 3,
+                         om.scale=NULL,
+                         dic = TRUE,
+                         regressor = Scale
+                         )
+                   
+mcmc_SCALE <- mtc.run(model_SCALE, n.adapt = 5000, n.iter = 200000, thin = 10)
+
+summary(mcmc_SCALE)
+
+gelman.plot(mcmc_SCALE)
+
+gelman.diag(mcmc_SCALE)$mpsrf
+
+```
+
+```{r}
+
+# png("mcmc_sens_plot.png", width = 1100, height = 1200)  # Save as PNG
+# plot(mcmc_SCALE)  # Create the plot
+# dev.off()  # Close the device
+
+```
+
+```{r}
+
+## Results adjusted by UPDRS
+forest(relative.effect(mcmc_SCALE, t1 = "CON", covariate = 1),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 2))
+
+forest(relative.effect(mcmc_SCALE, t1 = "CON", covariate = 0),
+       use.description = FALSE, # Use long treatment names
+       xlim = c(-1, 2))
+
+```
+
+```{r}
+ 
+par(mfrow = c(1,2))
+plotCovariateEffect(mcmc_SCALE,
+                    t1 = "CON",
+                    t2 = "rTMS_HF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+plotCovariateEffect(mcmc_SCALE,
+                    t1 = "CON",
+                    t2 = "rTMS_LF",
+                    xlim=NULL,
+                    ylim=NULL,
+                    ask=dev.interactive(orNone=TRUE)
+                    )
+
+```
+
+################################################################################ 
+
+################################################################################ 
+
+################################################################################ 
+
+## SUBJECTIVE rTMS FOCUS
+
+```{r}
+
+MetaSet_Subj <- MetaSet %>%
+                filter(Dimension == "Subjective" & Tool == "Q" & Node == "rTMS")
+
+MetaSet_Subj <- MetaSet_Subj %>%
+                filter(!row_number() %in% c(1, 7, 10, 12, 15))
+
+MetaSet_Subj_s <- MetaSet_Subj %>%
+                  filter(!row_number() %in% c(3))
+
+MetaSet_fnma <- MetaSet %>%
+                filter(Dimension == "Subjective" & Tool == "Q")
+
+MetaSet_FNMA <- MetaSet_fnma %>%
+                filter(!row_number() %in% c(1, 3, 5, 6, 11, 16, 17, 19, 22))
+
+MetaSet_FNMA_s <- MetaSet_fnma %>%
+                  filter(!row_number() %in% c(1, 3, 5, 6, 11, 16, 19, 22))
+
+MetaSet_ESS <- MetaSet %>%
+                filter(Dimension == "Subjective" & Outcome == "ESS")
+
+source("C:/Users/jacop/Documents/R_dataset/SRMA_MeTA_Bayes_Net/0.MetaReg/EggerTestFx.R")
+
+detach("package:gemtc", unload = FALSE)
+detach("package:BUGSnet", unload = FALSE)
+
+```
+
+```{r}
+
+# Meta-Analysis rTMS
+
+m.gen <- metacont(n.e = INT_N,
+                  mean.e = INT_Mean_Diff,
+                  sd.e = INT_sd_diff,
+                  n.c = CON_N,
+                  mean.c = CON_Mean_Diff,
+                  sd.c = CON_sd_diff,
+                  studlab = study,
+                  data = MetaSet_Subj,
+                  subgroup = Treatment,
+                  sm = "SMD",
+                  method.smd = "Hedges",
+                  fixed = FALSE,
+                  random = TRUE,
+                  methods.tau ="REML",
+                  hank = TRUE,
+                  title = "rTMS effects on Subjective Sleep Quality in PD")
+
+# Summary
+m.gen
+
+# Risk of Bias
+funnel(m.gen,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+# Add title
+png(file = "Funnel Plot.png", width = 1000, height = 1200, res = 150)
+funnel(m.gen)
+dev.off()
+
+# Egger's Regression Test
+y = m.gen$TE/m.gen$seTE
+x = 1/m.gen$seTE
+lmBias <- lm(y ~ x)
+summary(lmBias, m.gen = .)
+plot(y ~ x, xlim=c(1, 5), ylim=c(-5, 10))
+abline(lm(y ~ x))
+plot(lmBias)
+
+```
+
+```{r}
+
+# Print the Results
+png(file = "rTMS_RevMan.png", width = 1800, height = 800, res = 150)
+forest(m.gen,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+```{r}
+
+m.gen_ess <- metacont(n.e = INT_N,
+                      mean.e = INT_Mean_Diff,
+                      sd.e = INT_sd_diff,
+                      n.c = CON_N,
+                      mean.c = CON_Mean_Diff,
+                      sd.c = CON_sd_diff,
+                      studlab = study,
+                      data = MetaSet_ESS,
+                      subgroup = Treatment,
+                      sm = "MD",
+                      method.smd = "Hedges",
+                      fixed = FALSE,
+                      random = TRUE,
+                      methods.tau ="REML",
+                      hank = TRUE,
+                      title = "rTMS effects on Subjective Sleep Quality in PD")
+
+# Summary
+m.gen_ess
+
+# Risk of Bias
+funnel(m.gen_ess,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+# Egger's Regression Test
+y = m.gen_ess$TE/m.gen_ess$seTE
+x = 1/m.gen_ess$seTE
+lmBias <- lm(y ~ x)
+summary(lmBias, m.gen_ess = .)
+plot(y ~ x, xlim=c(1, 5), ylim=c(-5, 10))
+abline(lm(y ~ x))
+plot(lmBias)
+
+```
+
+```{r}
+
+# Print the Results
+png(file = "ESS_RevMan.png", width = 1800, height = 800, res = 150)
+forest(m.gen_ess,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+```{r}
+
+## META-REG##
+
+# Moderators
+Intensity <- MetaSet_Subj[,"TMS_Int..."]
+TotPulses <- MetaSet_Subj[,"TMS_Tot.pulses"]
+SessPulses <- MetaSet_Subj[,"TMS_Sess.pulses"]
+NIH <- MetaSet_Subj[,"NIH_Per"]
+
+m.gen.rTMSInt <- metareg(m.gen, Intensity, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen.rTMSInt
+permutest(m.gen.rTMSInt)
+
+m.gen.TotPulse <- metareg(m.gen, TotPulses, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen.TotPulse
+permutest(m.gen.TotPulse)
+
+m.gen.SessPulse <- metareg(m.gen, SessPulses, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen.SessPulse
+permutest(m.gen.SessPulse)
+
+m.gen.NIH <- metareg(m.gen, NIH, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen.NIH
+permutest(m.gen.NIH)
+
+```
+
+```{r}
+
+bubble(m.gen.TotPulse, studlab = TRUE)
+bubble(m.gen.NIH, studlab = TRUE)
+
+```
+
+#### Sensitivity Analysis
+
+```{r}
+
+# Meta-Analysis rTMS
+
+m.gen_s <- metacont(n.e = INT_N,
+                    mean.e = INT_Mean_Diff,
+                    sd.e = INT_sd_diff,
+                    n.c = CON_N,
+                    mean.c = CON_Mean_Diff,
+                    sd.c = CON_sd_diff,
+                    studlab = study,
+                    data = MetaSet_Subj_s,
+                    subgroup = Treatment,
+                    sm = "SMD",
+                    method.smd = "Hedges",
+                    fixed = FALSE,
+                    random = TRUE,
+                    methods.tau ="REML",
+                    hank = TRUE,
+                    title = "rTMS effects on Subjective Sleep Quality in PD")
+
+# Summary
+m.gen_s
+
+# Risk of Bias
+funnel(m.gen_s,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+
+# Egger's Regression Test
+y = m.gen_s$TE/m.gen_s$seTE
+x = 1/m.gen_s$seTE
+lmBias <- lm(y ~ x)
+summary(lmBias, m.gen_s = .)
+plot(y ~ x, xlim=c(1, 5), ylim=c(-5, 10))
+abline(lm(y ~ x))
+plot(lmBias)
+
+```
+
+```{r}
+
+# Print the Results
+png(file = "rTMSmode_s.png", width = 1800, height = 800, res = 150)
+forest(m.gen_s,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+```{r}
+
+Intensity_s <- MetaSet_Subj_s[,"TMS_Int..."]
+TotPulses_s <- MetaSet_Subj_s[,"TMS_Tot.pulses"]
+SessPulses_s <- MetaSet_Subj_s[,"TMS_Sess.pulses"]
+NIH_s <- MetaSet_Subj_s[,"NIH_Per"]
+
+
+m.gen_s.rTMSInt <- metareg(m.gen_s, Intensity_s, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen_s.rTMSInt
+permutest(m.gen_s.rTMSInt)
+
+
+m.gen_s.TotPulse <- metareg(m.gen_s, TotPulses_s, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen_s.TotPulse
+permutest(m.gen_s.TotPulse)
+
+
+m.gen_s.SessPulse <- metareg(m.gen_s, SessPulses_s, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen_s.SessPulse
+permutest(m.gen_s.SessPulse)
+
+
+m.gen_s.NIH <- metareg(m.gen_s, NIH_s, method.tau = "REML", hank= TRUE, intercept=TRUE)
+m.gen_s.NIH
+permutest(m.gen_s.NIH)
+
+bubble(m.gen_s.NIH, studlab = TRUE)
+
+```
+
+```{r}
+
+# Meta-Analysis
+
+m.gen_s1 <- metacont(n.e = INT_N,
+                     mean.e = INT_Mean_Diff,
+                     sd.e = INT_sd_diff,
+                     n.c = CON_N,
+                     mean.c = CON_Mean_Diff,
+                     sd.c = CON_sd_diff,
+                     studlab = study,
+                     data = MetaSet_FNMA,
+                     subgroup = Treatment,
+                     sm = "SMD",
+                     method.smd = "Hedges",
+                     fixed = FALSE,
+                     random = TRUE,
+                     methods.tau ="REML",
+                     hank = TRUE,
+                     title = "NIBS effects on Subjective Sleep Quality in PD")
+
+# Summary
+m.gen_s1
+
+# Risk of Bias
+funnel(m.gen_s1,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+
+# Egger's Regression Test
+y = m.gen_s1$TE/m.gen_s1$seTE
+x = 1/m.gen_s1$seTE
+lmBias <- lm(y ~ x)
+summary(lmBias, m.gen_s1 = .)
+plot(y ~ x, xlim=c(1, 5), ylim=c(-5, 10))
+abline(lm(y ~ x))
+plot(lmBias)
+
+```
+
+```{r}
+
+# Print the Results
+png(file = "NIBS_s1.png", width = 1600, height = 1050, res = 150)
+forest(m.gen_s1,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+#### 
+
+```{r}
+
+# Meta-Analysis
+
+m.gen_s2 <- metacont(n.e = INT_N,
+                     mean.e = INT_Mean_Diff,
+                     sd.e = INT_sd_diff,
+                     n.c = CON_N,
+                     mean.c = CON_Mean_Diff,
+                     sd.c = CON_sd_diff,
+                     studlab = study,
+                     data = MetaSet_FNMA_s,
+                     subgroup = Treatment,
+                     sm = "SMD",
+                     method.smd = "Hedges",
+                     fixed = FALSE,
+                     random = TRUE,
+                     methods.tau ="REML",
+                     hank = TRUE,
+                     title = "NIBS effects on Subjective Sleep Quality in PD")
+
+# Summary
+m.gen_s2
+
+# Risk of Bias
+funnel(m.gen_s2,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+
+# Egger's Regression Test
+y = m.gen_s2$TE/m.gen_s2$seTE
+x = 1/m.gen_s2$seTE
+lmBias <- lm(y ~ x)
+summary(lmBias, m.gen_s2 = .)
+plot(y ~ x, xlim=c(1, 5), ylim=c(-5, 10))
+abline(lm(y ~ x))
+plot(lmBias)
+
+```
+
+```{r}
+
+# Print the Results
+png(file = "NIBS_s2.png", width = 1600, height = 1200, res = 150)
+forest(m.gen_s2,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+################################################################################ 
+
+################################################################################ 
+
+################################################################################ 
+
+#### OBJECTIVE
+
+################################################################################ 
+
+#### Prep OBJECTIVE
+
+################################################################################ 
+
+```{r}
+
+## _AB >> keeping SINGLE-ARM to conduct AB-BNMA
+
+Objective <- MetaSet %>%
+             filter(Dimension == "Objective")
+
+Objective_SEall <- Objective %>%
+                   filter(Dimension == "Objective" & Outcome == "SE(%)")
+
+Objective_SE <- Objective_SEall %>%
+                filter(!row_number() %in% c(1, 2, 3, 6))
+
+Objective_TSTall <- Objective %>%
+                    filter(Dimension == "Objective" & Outcome == "TST")
+
+Objective_TST <- Objective_TSTall %>%
+                 filter(!row_number() %in% c(1, 2, 3, 6))
+
+Objective_SOLall <- Objective %>%
+                    filter(Dimension == "Objective" & Outcome == "SOL")
+
+Objective_SOL <- Objective_SOLall %>%
+                 filter(!row_number() %in% c(1, 4, 5, 8))
+
+Objective_WASOall <- Objective %>%
+                     filter(Dimension == "Objective" & Outcome == "WASO")
+
+Objective_WASO <- Objective_WASOall %>%
+                  filter(!row_number() %in% c(1))
+
+Objective_KSall <- Objective %>%
+                   filter(Dimension == "Objective" & Outcome == "Ks")
+
+```
+
+```{r}
+
+m.gen_SE <- metacont(n.e = INT_N,
+                     mean.e = INT_Mean_Diff,
+                     sd.e = INT_sd_diff,
+                     n.c = CON_N,
+                     mean.c = CON_Mean_Diff,
+                     sd.c = CON_sd_diff,
+                     studlab = study,
+                     data = Objective_SE,
+                     subgroup = Tool,
+                     sm = "SMD",
+                     method.smd = "Hedges",
+                     fixed = FALSE,
+                     random = TRUE,
+                     methods.tau ="REML",
+                     hank = TRUE,
+                     title = "rTMS effects on SE%  in PD")
+
+# Summary
+m.gen_SE
+
+# Risk of Bias
+funnel(m.gen_SE,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+# Add title
+# title("Funnel Plot (rTMS effects on SE% in PD)")
+# pdf(file = "FunnelAll.pdf", width=12, height=14)
+# funnel(m.gen_SE)
+# dev.off()
+
+```
+
+```{r}
+
+m.gen_SOL <- metacont(n.e = INT_N,
+                      mean.e = INT_Mean_Diff,
+                      sd.e = INT_sd_diff,
+                      n.c = CON_N,
+                      mean.c = CON_Mean_Diff,
+                      sd.c = CON_sd_diff,
+                      studlab = study,
+                      data = Objective_SOL,
+                      subgroup = Tool,
+                      sm = "MD",
+                      method.smd = "Hedges",
+                      fixed = FALSE,
+                      random = TRUE,
+                      methods.tau ="REML",
+                      hank = TRUE,
+                      title = "rTMS effects on SOL in PD")
+
+# Summary
+m.gen_SOL
+
+# Risk of Bias
+funnel(m.gen_SOL,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+png(file = "rTMS_SOL_RevMan.png", width = 1800, height = 800, res = 150)
+forest(m.gen_SOL,
+       layout = "RevMan5"
+       )
+dev.off()
+
+```
+
+```{r}
+
+m.gen_TST <- metacont(n.e = INT_N,
+                      mean.e = INT_Mean_Diff,
+                      sd.e = INT_sd_diff,
+                      n.c = CON_N,
+                      mean.c = CON_Mean_Diff,
+                      sd.c = CON_sd_diff,
+                      studlab = study,
+                      data = Objective_TST,
+                      subgroup = Tool,
+                      sm = "SMD",
+                      method.smd = "Hedges",
+                      fixed = FALSE,
+                      random = TRUE,
+                      methods.tau ="REML",
+                      hank = TRUE,
+                      title = "rTMS effects on SOL in PD")
+
+# Summary
+m.gen_TST
+
+# Risk of Bias
+funnel(m.gen_TST,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+```
+
+```{r}
+
+m.gen_WASO <- metacont(n.e = INT_N,
+                       mean.e = INT_Mean_Diff,
+                       sd.e = INT_sd_diff,
+                       n.c = CON_N,
+                       mean.c = CON_Mean_Diff,
+                       sd.c = CON_sd_diff,
+                       studlab = study,
+                       data = Objective_WASO,
+                       subgroup = Tool,
+                       sm = "SMD",
+                       method.smd = "Hedges",
+                       fixed = FALSE,
+                       random = TRUE,
+                       methods.tau ="REML",
+                       hank = TRUE,
+                       title = "rTMS effects on SOL in PD")
+
+# Summary
+m.gen_WASO
+
+# Risk of Bias
+funnel(m.gen_WASO,
+       xlim = c(-3, 3),
+       studlab = FALSE)
+
+```
+
+################################################################################ 
+
+#### PCNETMETA
+
+################################################################################ 
+
+#### Including Single-arm studies
+
+```{r}
+
+# nma.networkplot(s.id = study, t.id = treatment,
+#                 n = post_N,
+#                 data = Subjective_AB,
+#                 title = "NIBS Network",
+#                 title.cex = 2,
+#                 alphabetic = TRUE,
+#                 multi.show = TRUE, #if multi-arm studies.
+#                 weight.edge = TRUE,
+#                 adjust.thick = 6, #default is 5
+#                 weight.node = TRUE,  #TRUE = total sample size; FALSE = number of direct treatment comparisons
+#                 weight.node.ss = TRUE,
+#                 adjust.node.size = 10, #default is 10
+#                 node.col = "gray",
+#                 edge.col = "black",
+#                 text.cex = 1, #default is 1
+#                 adjust.figsizex = 1.3,
+#                 adjust.figsizey = 1.5
+#                 )
+
+```
+
+```{r}
+
+# nibs_ab.out <- nma.ab.cont(s.id = study,
+#                            t.id = treatment,
+#                            mean = SMD_w, #SMD_w #Mean_Diff #diff #
+#                            sd = se_diff_w, #sd_diff_w #se_diff_w #std.err #
+#                            total.n = post_N,
+#                            data = Subjective_AB,
+#                            param = c("mu", "diff", "rank.prob"),
+#                            model = "hom_eqcor",  # "het_eqcor" "hom_eqcor" ; "het_cor" #                            
+#                            prior.type = "unif",  #"unif" "invgamma" ; "invwishart" "chol" 
+#                            #a = 0.00001, b = 0.1, c = 0.5,                           
+#                            higher.better = TRUE,                             
+#                            digits = 4,                           
+#                            n.adapt = 5000,                           
+#                            n.burnin = 100000,                          
+#                            n.iter = 200000,                             
+#                            n.chains = 3,                             
+#                            n.thin = 10,                             
+#                            conv.diag = TRUE,                            
+#                            trace = c("mu", "diff"),                            
+#                            dic = TRUE,                            
+#                            postdens = TRUE,                            
+#                            mcmc.samples = FALSE
+#                            )
+
+```
+
+```{r}
+
+# nibs_ab.out
+# 
+# sink("nibs_ab.out.txt")
+# print(nibs_ab.out)
+# sink()
+
+```
+
+```{r}
+
+# absolute.plot(nibs_ab.out, alphabetic = TRUE, digits = 2,
+#               save = TRUE, width = 5, height = 2, network.name = "nibs_ab.out")
+# 
+# contrast.plot(nibs_ab.out, effect.measure = "diff", reference = "CON", digits = 2,
+#               save = TRUE, width = 5, height = 2, network.name = "nibs_ab.out")
+
+```
+
+```{r}
+
+# rank.prob(nibs_ab.out, cex.axis = 1, cex.lab = 1, median = FALSE)
+
+```
+
+### Include Wilkinsons (CVS)
+
+```{r}
+
+nma.networkplot(s.id = study, t.id = treatment,
+                       n = post_N,
+                       data = Subjective_AB_sens1,
+                       title = "NIBS Network",
+                       title.cex = 2,
+                       alphabetic = TRUE,
+                       multi.show = TRUE, #if multi-arm studies.
+                       weight.edge = TRUE,
+                       adjust.thick = 6, #default is 5
+                       weight.node = TRUE,  #TRUE = total sample size; FALSE = number of direct treatment comparisons
+                       weight.node.ss = TRUE,
+                       adjust.node.size = 10, #default is 10
+                       node.col = "gray",
+                       edge.col = "black",
+                       text.cex = 1, #default is 1
+                       adjust.figsizex = 1.3,
+                       adjust.figsizey = 1.5
+                       )
+
+```
+
+```{r}
+
+totalParticipants <- sum(Subjective_AB_sens1$post_N, na.rm = TRUE)
+totalParticipants
+
+```
+
+```{r}
+
+nibs_ab_s.out <- nma.ab.cont(s.id = study,
+                             t.id = treatment,
+                             mean = Mean_Diff, #SMD_w #Mean_Diff #diff #
+                             sd = sd_diff_w, #sd_diff_w #se_diff_w #std.err #
+                             total.n = post_N,
+                             data = Subjective_AB_sens1,
+                             param = c("mu", "diff", "rank.prob"),
+                             model = "hom_eqcor",  # "het_eqcor" "hom_eqcor" ; "het_cor" #
+                             prior.type = "unif",  #"unif" "invgamma" ; "invwishart" "chol"
+                             #a = 0.00001, b = 0.1, c = 0.5,
+                             higher.better = TRUE,
+                             digits = 4,
+                             n.adapt = 5000,
+                             n.burnin = 100000,
+                             n.iter = 200000,
+                             n.chains = 3,
+                             n.thin = 10,
+                             conv.diag = TRUE,
+                             trace = c("mu", "diff"),
+                             dic = TRUE,
+                             postdens = TRUE,
+                             mcmc.samples = FALSE
+                             )
+
+```
+
+```{r}
+
+nibs_ab_s.out
+
+sink("nibs_ab_s.out.txt")
+print(nibs_ab_s.out)
+sink()
+
+```
+
+```{r}
+
+absolute.plot(nibs_ab_s.out, alphabetic = TRUE, digits = 2,
+              save = TRUE, width = 5, height = 2, network.name = "nibs_ab_s.out")
+
+contrast.plot(nibs_ab_s.out, effect.measure = "diff", reference = "CON", digits = 2,
+              save = TRUE, width = 5, height = 2, network.name = "nibs_ab_s.out")
+
+```
+
+```{r}
+
+rank.prob(nibs_ab_s.out, cex.axis = 1, cex.lab = 1, median = FALSE)
+
+```
+
+################################################################################ 
+
+################################################################################ 
+
+### NETMETA
+
+```{r}
+
+library(netmeta)
+library(dmetar)
+
+```
+
+```{r}
+
+m.netmeta <- netmeta(TE = diff,
+                     seTE = std.err,
+                     treat1 = Treatment,
+                     treat2 = Treatment_2,
+                     studlab = study,
+                     data = MetaSet_FNMA,
+                     sm = "MD",
+                     common = TRUE,
+                     random = FALSE,
+                     reference.group = "CON",
+                     details.chkmultiarm = TRUE,
+                     sep.trts = " vs ")
+
+m.netmeta
+
+```
+
+```{r}
+
+decomp.design(m.netmeta)
+
+```
+
+```{r}
+
+d.evidence <- direct.evidence.plot(m.netmeta)
+
+png(filename = "evidence.png", width = 1400, height = 600)
+plot(d.evidence)
+dev.off()
+
+```
+
+```{r}
+
+result.matrix <- m.netmeta$TE.fixed
+result.matrix <- round(result.matrix, 2)
+result.matrix[lower.tri(result.matrix, diag = FALSE)] <- NA
+result.matrix
+
+```
+
+```{r}
+
+# Produce effect table
+netleague <- netleague(m.netmeta,
+                       bracket = "(",
+                       digits=2)
+
+write.csv(netleague$fixed, "netleague.csv")
+
+netrank(m.netmeta, small.values = "bad")
+
+```
+
+```{r}
+
+forest(m.netmeta,
+       reference.group = "CON",
+       sortvar = TE,
+       xlim = c(-1.3, 1.5),
+       #smlab = "study",
+       drop.reference.group = TRUE,
+       label.left = "Favors CON",
+       label.right = "Favors NIBS",
+       #labels = long.labels
+       )
+
+```
+
+```{r}
+
+netsplit(m.netmeta)
+
+```
+
+```{r}
+
+png(filename = "NodeSplit.png", width = 600, height = 600)
+netsplit(m.netmeta) %>% forest(show = "all")
+dev.off()
+
+```
+
+```{r}
+
+funnel(m.netmeta,
+       order = c("rTMS_LF", "rTMS_HF", "CON"),
+       # pch = c(1:3, 5, 6, 8, 15:19, 21:24),
+       # col = c("blue", "red", "purple", "forestgreen", "grey", "green", "black", "brown", "orange", "pink", "khaki", "plum",                      "aquamarine", "sandybrown", "coral", "gold4"),
+       linreg = TRUE
+       )
+
+```
+
+################################# 
+
+### Include Wilkinsons (CVS)
+
+```{r}
+
+m.netmeta_s <- netmeta(TE = diff,
+                       seTE = std.err,
+                       treat1 = Treatment,
+                       treat2 = Treatment_2,
+                       studlab = study,
+                       data = MetaSet_FNMA_s,
+                       sm = "MD",
+                       common = TRUE,
+                       random = FALSE,
+                       reference.group = "CON",
+                       details.chkmultiarm = TRUE,
+                       sep.trts = " vs ")
+
+m.netmeta_s
+
+```
+
+```{r}
+
+decomp.design(m.netmeta_s)
+
+```
+
+```{r}
+
+d.evidence_s <- direct.evidence.plot(m.netmeta_s)
+
+png(filename = "evidence_s.png", width = 1400, height = 600)
+plot(d.evidence_s)
+dev.off()
+
+```
+
+```{r}
+
+result.matrix_s <- m.netmeta_s$TE.fixed
+result.matrix_s <- round(result.matrix_s, 2)
+result.matrix_s[lower.tri(result.matrix_s, diag = FALSE)] <- NA
+result.matrix_s
+
+```
+
+```{r}
+
+# Produce effect table
+netleague_s <- netleague(m.netmeta_s,
+                         bracket = "(",
+                         digits=2)
+
+write.csv(netleague_s$fixed, "netleague_s.csv")
+
+netrank(m.netmeta_s, small.values = "bad")
+
+```
+
+```{r}
+
+forest(m.netmeta_s,
+       reference.group = "CON",
+       sortvar = TE,
+       xlim = c(-0.5, 1.8),
+       #smlab = "study",
+       drop.reference.group = TRUE,
+       label.left = "Favors CON",
+       label.right = "Favors NIBS",
+       #labels = long.labels
+       )
+
+
+```
+
+```{r}
+
+netsplit(m.netmeta_s)
+
+```
+
+```{r}
+
+png(filename = "NodeSplit_s.png", width = 600, height = 850)
+netsplit(m.netmeta_s) %>% forest(show = "all")
+dev.off()
+
+```
+
+```{r}
+
+funnel(m.netmeta_s,
+       order = c("rTMS_LF", "rTMS_HF", "CON"),
+       # pch = c(1:3, 5, 6, 8, 15:19, 21:24),
+       # col = c("blue", "red", "purple", "forestgreen", "grey", "green", "black", "brown", "orange", "pink", "khaki", "plum",                      "aquamarine", "sandybrown", "coral", "gold4"),
+       method.bias = "Egger"
+       )
+
+```
+
+```{r}
+
+SE_funnel <- as.data.frame(RE_results[["model"]][["data"]][["se.diffs"]])
+
+```
+
+```{r}
+
+sdm <-RE_results[["model"]][["data"]][["y_c"]] # re_model_fit[["pmdev"]]
+treat <- RE_results[["model"]][["data"]][["t_c"]]
+
+# Create a data frame with these columns
+df <- data.frame(sdm = sdm, treat = treat)
+
+# View the data frame
+df
+
+```
+
+```{r}
+
+# Extract the mean values from RE_Main
+mean_values <- RE_Main[["data"]][["mean"]]
+
+# Create a 'treatment' column (assuming 4 treatments, repeat as needed)
+treatment_values <- rep(2:5, length.out = length(mean_values))
+
+# Create the data frame
+df_treatment <- data.frame(mean = mean_values, treatment = treatment_values)
+
+# View the resulting data frame
+df_treatment
+
+```
+
+```{r}
+
+# Create a new column in df to store the difference
+df$sdm_diff <- mapply(function(treatment_value, pmdev_value)
+  
+                 {# Find the corresponding mean from df_treatment based on treatment_value
+                  mean_value <- df_treatment$mean[df_treatment$treatment == treatment_value]
+  
+                  # Calculate and return the difference
+                  if (length(mean_value) > 0) {
+                  return(pmdev_value - mean_value)
+                  } else {
+                  return(NA)  # Return NA if no matching treatment found
+                  }
+                  }, df$treat.2, df$sdm.2)
+
+# View the updated df with the pmdev_diff column
+df
+
+```
+
+```{r}
+
+## Combine df and SE_funnel_df by matching their rows
+  combined_data <- data.frame(sdm_diff = df$sdm_diff,        # pmdev_diff from df
+                              SE_funnel = SE_funnel$`2`  # SE_funnel from SE_funnel_df
+                              )
+
+
+## Funnel Boundaries
+  funnel_data <- data.frame(x = c(-1.96 * combined_data$SE_funnel, 1.96 * combined_data$SE_funnel),
+                            y = c(combined_data$SE_funnel, combined_data$SE_funnel)
+                            )
+  
+  # Add an extra point at the x-axis intersection (y = 0)
+  funnel_data <- rbind(funnel_data,
+                 data.frame(x = c(0, 0), y = c(0, 0))
+               )
+
+
+## Shape and color for Study data points
+  # Add a column for shape and color based on conditions
+  combined_data$Treatment  <- NA
+
+  # Assign shapes and colors to specific rows
+  combined_data$Treatment[c(11, 13, 14, 15)] <- "rTMS_LF vs. CON"
+  combined_data$Treatment[c(1, 3, 4, 5, 6, 9, 10)] <- "rTMS_HF vs. CON"
+  combined_data$Treatment[c(12)] <- "CVS vs. CON"
+  combined_data$Treatment[c(2, 7, 8)] <- "tDCS vs. CON"
+  
+  # Define the colors for each treatment
+  Treatment_colors <- c(
+  "rTMS_LF vs. CON" = "blue",
+  "rTMS_HF vs. CON" = "green",
+  "CVS vs. CON" = "purple",
+  "tDCS vs. CON" = "red"
+  )
+
+  
+## Create the funnel plot using ggplot2
+png("Comparison-Adjusted Funnel Plot.png", width = 1800, height = 800, res = 150)
+ggplot(combined_data, aes(x = sdm_diff, y = SE_funnel)) +
+       geom_point(aes(color = Treatment), size = 3) +
+       # geom_point(aes(shape = factor(shape), color = color), size = 3) + 
+       geom_vline(xintercept = 0, linetype = "solid", color = "red") +  # Horizontal line at y = 0
+       
+       # Adding the funnel plot lines for 95% CI bounds
+       geom_line(data = funnel_data, aes(x = x, y = y), linetype = "dashed", color = "black") +
+
+       # Adding Title and Axis
+       labs(title = "Comparison-adjusted Funnel Plot",
+       x = "Adjusted-MD Difference",
+       y = "Standard Error (SE)"
+       ) +
+      
+       # Theme Plot
+       theme_minimal() +
+       scale_y_reverse(limits = c(0.5, 0)) +
+       xlim(-1.5, 1.5) +
+       ylim(0.5, 0) +
+       theme(panel.grid = element_blank(),  # Remove gridlines
+             panel.background = element_rect(fill = "white"),  # Set the background to white
+             plot.background = element_rect(fill = "white"),   # Set the plot background to white
+             plot.title = element_text(hjust = 0.5, face = "bold"),  # Center the title
+             legend.title = element_text(face = "bold"),  # Bold legend title
+             legend.position = "right"  # Place legend on the right
+             )
+dev.off()
+
+```
+
+```{r}
+
+CON_data <- Subjective[Subjective$treatment == "CON", ]
+baseline_CON_mean <- mean(CON_data$SMD_w, na.rm = TRUE)
+
+# sink("baseline_CON_mean.txt")
+# print(baseline_CON_mean)
+# sink()
+
+# Extract the last five rows & Exclude the last row
+Absolute_SMD <- tail(league.out_RE[["longtable"]], 5)
+Absolute_SMD <- head(Absolute_SMD, -1)
+
+# Add a new column to the df & do calculations
+Absolute_SMD$AB_SMD <- Absolute_SMD$mean + baseline_CON_mean
+
+# Export the dataframe as text
+write.table(Absolute_SMD, "Absolute_SMD.txt")
+
+
+```
+
+```{r}
+
+rTMS_LF_NIH <- Subjective[Subjective$treatment == "rTMS_LF", ]
+rTMS_LF_NIH_mean <- mean(rTMS_LF_NIH$NIH_Per, na.rm = TRUE)
+
+rTMS_HF_NIH <- Subjective[Subjective$treatment == "rTMS_HF", ]
+rTMS_HF_NIH_mean <- mean(rTMS_HF_NIH$NIH_Per, na.rm = TRUE)
+
+rTMS_CVS_NIH <- Subjective[Subjective$treatment == "CVS", ]
+rTMS_CVS_NIH_mean <- mean(rTMS_CVS_NIH$NIH_Per, na.rm = TRUE)
+
+rTMS_tDCS_NIH <- Subjective[Subjective$treatment == "tDCS", ]
+rTMS_tDCS_NIH_mean <- mean(rTMS_tDCS_NIH$NIH_Per, na.rm = TRUE)
+
+Treatment_NIH_Score <- tibble(NIH_Score = c(rTMS_LF_NIH_mean, rTMS_HF_NIH_mean, rTMS_CVS_NIH_mean, rTMS_tDCS_NIH_mean),
+                              Treatment = rep(c("rTMS_LF", "rTMS_HF", "rTMS_CVS", "rTMS_tDCS"), 
+                              times = c(length(rTMS_LF_NIH_mean), length(rTMS_HF_NIH_mean), 
+                              length(rTMS_CVS_NIH_mean), length(rTMS_tDCS_NIH_mean)))
+                              )
+
+# Export the dataframe as txt
+write.table(Treatment_NIH_Score, "Treatment_NIH_Score.txt")
+
+
+Treatment_NIH_Score
+
+```
+
+##JC92##
